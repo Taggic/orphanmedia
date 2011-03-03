@@ -1,0 +1,32 @@
+orphanmedia Plugin
+===============
+
+1. Installation
+--------------------
+Just download the zip and extract it into your "\lib\plugins" directory. 
+
+2. Examples/Usage
+------------------------------
+
+Use this plugin to find orphan and missing media files within your DokuWiki. 
+
+OrphanMedia show which medias are: 
+  * Orphans (the media file exists, but not linked and wasting space only)
+  * Missing (the media file does not exist, but there are link(s) to it elsewhere on the pages)
+
+On top it provides a little statistic of your DokuWiki:
+  * Media list contains
+  * Page list contains
+  * Found media filename references
+  * Different media links extracted from pages
+  * Missing media files detected
+  * Found orphan media files 
+
+3. Syntax
+---------------
+
+Basic usage is to place the following two syntax lines into the page markup of page with Admin/Superuser ACL: 
+
+   ====== Orphan Media detection ======
+  ~~NOCACHE~~
+  ~~ORPHANMEDIA~~

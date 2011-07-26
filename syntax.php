@@ -51,7 +51,7 @@ define('DEBUG', 0);
                   . '" class="media" alt="orphan Media File" /></a></td>'
                   . '<td>'. $i1 . '</td><td>' . $afile . '</td></tr>';
         }             
-        $output.= '</td></tr></table></p>';        
+        $output.= '</td></tr></table>';        
         return $output;
     }
  
@@ -482,26 +482,33 @@ class syntax_plugin_orphanmedia extends DokuWiki_Syntax_Plugin {
             break;
         
         case 'summary':    
-            $output.= '<p>Media list contains: '. $count_medialist_array . " files" . '</p>';    
+            $output.= '<div class="level1">';            $output.= '<p>Media list contains: '. $count_medialist_array . " files" . '</p>';    
             $output.= '<p>Page list contains: '. $page_counter . " files" . '</p>';    
             $output.= '<p>Found  media filename references: '. $a_counter . " in " . count($listPageFiles) . ' pages</p>';    
             $output.= '<p>Different media links extracted from pages: '. $tmp_link_counter . '</p>';    
             $output.= '<p>Missing media files detected: '. $e_counter . '</p>';    
-            $output.= '<p>Found orphan media files: '. $b_counter . '</p>';    
+            $output.= '<p>Found orphan media files: '. $b_counter . '</p>'; 
+            $output.= '</div>';
             break;
 
         case 'missing':
+            $output.= '<div class="level1">';
+            $output.= '<p>The following media files are referenced within pages but the media files do not exist at defined path:</p>';    
             $output.= '<table class="inline"><tr><th  class="col0 centeralign">i</th><th  class="col1 centeralign">#</th><th  class="col2 centeralign"> Page files </th><th  class="col3 centeralign"> missing Media </th></tr>';   
             $img = "q.png";
             if (count($missing_Media_Files)>=1)  $c2_output = case1_good_output($missing_Media_Files, $img);
             $output .= $c2_output;                  
+            $output.= '</table></div>';   
             break;
     
         case 'orphan':
+            $output.= '<div class="level1">';
+            $output.= '<p>The following orphan media files were detected:</p>';    
             $output.= '<table class="inline"><tr><th  class="col0 centeralign">i</th><th  class="col1 centeralign">#</th><th  class="col2 centeralign"> orphan Media </th><th  class="col3 centeralign"> Preview </th></tr>';   
             $img = "nok.png";
             if (count($orphan_Media_Files)>=1)  $c1_output = case1_good_output($orphan_Media_Files, $img);
             $output .= $c1_output;                  
+            $output.= '</table></div>';   
             break;
   }    	
         foreach($mediareferences as $link) {

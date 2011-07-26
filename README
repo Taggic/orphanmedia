@@ -4,7 +4,7 @@ orphanmedia Plugin
 1. Installation
 --------------------
 Just download the zip and extract it into your "\lib\plugins" directory. 
-
+ 
 2. Examples/Usage
 ------------------------------
 
@@ -29,4 +29,7 @@ Basic usage is to place the following two syntax lines into the page markup of p
 
    ====== Orphan Media detection ======
   ~~NOCACHE~~
-  ~~ORPHANMEDIA~~
+  ~~ORPHANMEDIA:all~~
+  ~~ORPHANMEDIA:summary~~
+  ~~ORPHANMEDIA:missing~~
+  ~~ORPHANMEDIA:orphan~~

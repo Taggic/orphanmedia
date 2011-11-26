@@ -236,6 +236,12 @@ class syntax_plugin_orphanmedia extends DokuWiki_Syntax_Plugin {
      // Create output
      function render($format, &$renderer, $data) {
         global $INFO, $conf;
+        
+        // Filter by Extension ----------------------
+        $defFileTypes = explode(':',$data[0]); // split use case entry and file extensions
+        $data[0] = $defFileTypes[0]; // store pure use case entry back to data
+        unset($defFileTypes[0]); // delete the use case entry
+
         if($format == 'xhtml'){ 
             // $data is an array
             // $data[0] is the report type
@@ -243,7 +249,7 @@ class syntax_plugin_orphanmedia extends DokuWiki_Syntax_Plugin {
             //handle choices
             switch ($data[0]){    
                 case ('all' || 'missing' || 'orphan' || 'summary'):       
-                    $renderer->doc .= $this->all_media_pages($data);
+                    $renderer->doc .= $this->all_media_pages($data, $defFileTypes);
                     break;
                 default:
                   $renderer->doc .= '<b>' . htmlspecialchars($data[0]) . "ORPHANMEDIA syntax error</b>";
@@ -253,12 +259,13 @@ class syntax_plugin_orphanmedia extends DokuWiki_Syntax_Plugin {
         return false;
      }
 // ---------------------------------------------------------------
-    function all_media_pages($params_array) {
+    function all_media_pages($params_array, $defFileTypes) {
                      
       global $conf;
       $data = array();
       $result = '';
       $operator = 1;
+
            
   // 1. load all media files into array
       // create an array of all media files incl. path   
@@ -288,6 +295,9 @@ class syntax_plugin_orphanmedia extends DokuWiki_Syntax_Plugin {
          $body = '';
          $body = file_get_contents($page_filepath);
           
+       
+//        echo var_dump($defFileTypes).'<br />';
+
          // 4. find all page-> media links defined by Link pattern into $links
          $links = array();
 //         define('LINK_PATTERN', "/\{\{.*\}\}/"); 
@@ -321,7 +331,7 @@ class syntax_plugin_orphanmedia extends DokuWiki_Syntax_Plugin {
              if(strlen($media_link)>0) $tmp_link_counter++;
          }
     }
-
+     
 //  $params_array[0] = 'all' || 'summary' || 'orphan' || 'missing'  <- one of that is mandatory
     switch ($params_array[0]){
 // ---------------------------------------------------------------------------//
@@ -338,6 +348,21 @@ class syntax_plugin_orphanmedia extends DokuWiki_Syntax_Plugin {
       $mediareferences = array();
       
       foreach($c1_medialist as $media_file) { 
+         // Filter by Extension ----------------------
+         // check if a file type was defined what is the only one to be considered
+         if(count($defFileTypes) > 0) {
+            // step over to next file if media_file extension is not equal to one of $defFileTypes
+            $blinker = false;
+            $ext = pathinfo($media_file);
+            foreach($defFileTypes as $defFileType) {
+                if ($defFileType===$ext['extension']) {
+                  $blinker=true;
+                  break;
+                }
+            }
+            if ($blinker === false) continue ; // with next $media_file          
+         }
+         
          $checkFlag = FALSE;
          $c_counter++;
          // 1.2 loop page files 
@@ -379,7 +404,7 @@ class syntax_plugin_orphanmedia extends DokuWiki_Syntax_Plugin {
             $picturepreview = '<a href="' . DOKU_URL . 'lib/exe/detail.php?media=' . $rt2  
                               . '" class="media" title="'. $m_filename  
                               . '"><img src="'. DOKU_URL . 'lib/exe/fetch.php?media=' . $rt2 
-                              . '&w=100" class="media" width=100 alt="' . $m_filename . '" /></a>';  
+                              . '&w=100" class="media" alt="' . $m_filename . '" /></a>';  
 
             $orphan_Media_Files[] = $m_path . $m_filename . "</td><td>" . $picturepreview;
             $b_counter++;
@@ -409,40 +434,57 @@ class syntax_plugin_orphanmedia extends DokuWiki_Syntax_Plugin {
               $m_link = str_replace(":", '/' ,$tst);
               $m_link = str_replace("//", '/' ,$m_link);
               $checkFlag = FALSE;
-              
-              // 2.3 loop media files
-              foreach($c1_medialist as $media_file) {
-                  
-                  // 2.4 compare media link and media files
-                  if(strpos(strtolower($media_file), strtolower($m_link))>0) {
-                      $checkFlag = TRUE;
-                      // link targets to existing file, continue with next link
-                      break;
-                  }
-              }
-              // all media files checked with current media link from current page
-              if($checkFlag === FALSE) {
-                  //extract page file name
-                  $p_filename = basename($x_array[0]);
-                  
-                  //cut everything before pages/ from link
-                  $y_pos=strpos($x_array[0], "pages");
-                  $t1 = substr($x_array[0], $y_pos);
-            
-                  
-                  $t1 = substr(str_replace( ".txt" , "" , $t1 ) , 5, 9999);
-                  // turn it into wiki link without "pages"
-                  /*  $t1= html_wikilink($t1,$t1);  */
-                  $t2 = str_replace("/", ":", $t1);
-                  $t2 = substr($t2, 1, strlen($t2));
-                   
-                   $t1 = '<a class=wikilink1 href="'. DOKU_URL . "doku.php?id=" . $t2 . '" title="' . $t1 . '" rel="nofollow">' . $t1 . '</a>';                   
 
-                  // store page file and media link for output
-                  $missing_Media_Files[] = $t1 . "</td><td>" . $m_link;
-                  $e_counter++;
-                  
-              }
+             // Filter by Extension ----------------------
+             // check if a $tst file extesion was defined what is the only one to be considered
+             $blinker = true;
+             if(count($defFileTypes) > 0) {
+                // step over to next file if $tst extension is not equal to one of $defFileTypes
+                $blinker = false;
+                $ext = pathinfo($m_link);
+                foreach($defFileTypes as $defFileType) {
+                    if ($defFileType===$ext['extension']) {
+                      $blinker = true;
+                      break;
+                    }
+                }
+             }
+             
+             // Filter by Extension ----------------------
+             if ($blinker === true) {
+                // 2.3 loop media files
+                foreach($c1_medialist as $media_file) {
+                    // 2.4 compare media link and media files
+                    if(strpos(strtolower($media_file), strtolower($m_link))>0) {
+                        $checkFlag = TRUE;
+                        // link targets to existing file, continue with next link
+                        break;
+                    }
+                }
+
+               // all media files checked with current media link from current page
+                if($checkFlag === FALSE) {
+                    //extract page file name
+                    $p_filename = basename($x_array[0]);
+                    
+                    //cut everything before pages/ from link
+                    $y_pos=strpos($x_array[0], "pages");
+                    $t1 = substr($x_array[0], $y_pos);
+              
+                    
+                    $t1 = substr(str_replace( ".txt" , "" , $t1 ) , 5, 9999);
+                    // turn it into wiki link without "pages"
+                    /*  $t1= html_wikilink($t1,$t1);  */
+                    $t2 = str_replace("/", ":", $t1);
+                    $t2 = substr($t2, 1, strlen($t2));
+                     
+                     $t1 = '<a class=wikilink1 href="'. DOKU_URL . "doku.php?id=" . $t2 . '" title="' . $t1 . '" rel="nofollow">' . $t1 . '</a>';                   
+    
+                    // store page file and media link for output
+                    $missing_Media_Files[] = $t1 . "</td><td>" . $m_link;
+                    $e_counter++;
+                }
+             }
           }
       }
     }  
@@ -454,14 +496,17 @@ class syntax_plugin_orphanmedia extends DokuWiki_Syntax_Plugin {
         $output .= '</p>';
     switch ($params_array[0]){
         case 'all':
-            $output.= '<h2><a name="summary" id="summary">Summary</a></h2><div class="level1">';
-            $output.= '<p>Media list contains: '. $count_medialist_array . " files" . '</p>';    
-            $output.= '<p>Page list contains: '. $page_counter . " files" . '</p>';    
-            $output.= '<p>Found  media filename references: '. $a_counter . " in " . count($listPageFiles) . ' pages</p>';    
-            $output.= '<p>Different media links extracted from pages: '. $tmp_link_counter . '</p>';    
-            $output.= '<p>Missing media files detected: '. $e_counter . '</p>';    
-            $output.= '<p>Found orphan media files: '. $b_counter . '</p>'; 
-            $output.= '</div>';   
+            $output.= '<h2><a name="summary" id="summary">Summary</a></h2>';
+            $output.= '<div class="level1">';
+            if(count($defFileTypes) > 0) $output.= '<span>Filter for: '.implode(', ',$defFileTypes).'<br />'; 
+            $output.= '<table class="inline"><tr><th>Summary Item</th><th>Quantity</th></tr>';
+            $output.= '<tr><td>Media list contains </td><td>'. $count_medialist_array . " files" . '</td></tr>';    
+            $output.= '<tr><td>Page list contains </td><td>'. $page_counter . " files" . '</td></tr>';    
+            $output.= '<tr><td>Found  media filename references </td><td>'. $a_counter . " in " . count($listPageFiles) . ' pages</td></tr>';    
+            $output.= '<tr><td>Different media links extracted from pages </td><td>'. $tmp_link_counter . '</td></tr>';    
+            $output.= '<tr><td>Missing media files detected </td><td>'. $e_counter . '</td></tr>';    
+            $output.= '<tr><td>Found orphan media files </td><td>'. $b_counter . '</td></tr>'; 
+            $output.= '</table></div>';   
             
             $output.= '<h2><a name="missing_media" id="missing_media">Missing Media Files</a></h2>';
             $output.= '<div class="level1">';
@@ -482,18 +527,22 @@ class syntax_plugin_orphanmedia extends DokuWiki_Syntax_Plugin {
             break;
         
         case 'summary':    
-            $output.= '<div class="level1">';            $output.= '<p>Media list contains: '. $count_medialist_array . " files" . '</p>';    
-            $output.= '<p>Page list contains: '. $page_counter . " files" . '</p>';    
-            $output.= '<p>Found  media filename references: '. $a_counter . " in " . count($listPageFiles) . ' pages</p>';    
-            $output.= '<p>Different media links extracted from pages: '. $tmp_link_counter . '</p>';    
-            $output.= '<p>Missing media files detected: '. $e_counter . '</p>';    
-            $output.= '<p>Found orphan media files: '. $b_counter . '</p>'; 
-            $output.= '</div>';
+            $output.= '<div class="level1">';
+            if(count($defFileTypes) > 0) $output.= '<span>Filter for: '.implode(', ',$defFileTypes).'<br />'; 
+            $output.= '<table class="inline"><tr><th>Summary Item</th><th>Quantity</th></tr>'; 
+            $output.= '<tr><td>Media list contains </td><td>'. $count_medialist_array . " files" . '</td></tr>';    
+            $output.= '<tr><td>Page list contains </td><td>'. $page_counter . " files" . '</td></tr>';    
+            $output.= '<tr><td>Found  media filename references </td><td>'. $a_counter . " in " . count($listPageFiles) . ' pages</td></tr>';    
+            $output.= '<tr><td>Different media links extracted from pages </td><td>'. $tmp_link_counter . '</td></tr>';    
+            $output.= '<tr><td>Missing media files detected </td><td>'. $e_counter . '</td></tr>';    
+            $output.= '<tr><td>Found orphan media files </td><td>'. $b_counter . '</td></tr>'; 
+            $output.= '</table></div>';   
             break;
 
         case 'missing':
             $output.= '<div class="level1">';
-            $output.= '<p>The following media files are referenced within pages but the media files do not exist at defined path:</p>';    
+            $output.= '<span>The following media files are referenced within pages but the media files do not exist at defined path:</span><br />';    
+            if(count($defFileTypes) > 0) $output.= '<span>Filter for: '.implode(', ',$defFileTypes).'<br />'; 
             $output.= '<table class="inline"><tr><th  class="col0 centeralign">i</th><th  class="col1 centeralign">#</th><th  class="col2 centeralign"> Page files </th><th  class="col3 centeralign"> missing Media </th></tr>';   
             $img = "q.png";
             if (count($missing_Media_Files)>=1)  $c2_output = case1_good_output($missing_Media_Files, $img);
@@ -503,7 +552,8 @@ class syntax_plugin_orphanmedia extends DokuWiki_Syntax_Plugin {
     
         case 'orphan':
             $output.= '<div class="level1">';
-            $output.= '<p>The following orphan media files were detected:</p>';    
+            $output.= '<span>The following orphan media files were detected:</span><br />';    
+            if(count($defFileTypes) > 0) $output.= '<span>Filter for: '.implode(', ',$defFileTypes).'<br />'; 
             $output.= '<table class="inline"><tr><th  class="col0 centeralign">i</th><th  class="col1 centeralign">#</th><th  class="col2 centeralign"> orphan Media </th><th  class="col3 centeralign"> Preview </th></tr>';   
             $img = "nok.png";
             if (count($orphan_Media_Files)>=1)  $c1_output = case1_good_output($orphan_Media_Files, $img);

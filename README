@@ -25,7 +25,7 @@ On top it provides a little statistic of your DokuWiki:
 3. Syntax
 ---------------
 
-Basic usage is to place the following two syntax lines into the page markup of page with Admin/Superuser ACL: 
+Basic usage is to place one or more of the following syntax lines into the page markup of page with Admin/Superuser ACL: 
 
    ====== Orphan Media detection ======
   ~~NOCACHE~~

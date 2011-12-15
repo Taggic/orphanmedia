@@ -1,0 +1,33 @@
+/** * Design Elements - additional  CSS for the orphanmedia plugin
+ ** * @author Taggic <taggic@t-online.de> */
+/* ----- General Elements ---------- */
+
+.orph_sum_head {
+    font-weight: bold;
+    text-decoration:underline !important;
+}
+.oprph_sum_tbl {
+    border: none !important;
+    font-size: 85% !important;
+    line-height: 105%;
+}
+
+.oprph_sum_col0{
+    width: 20px !important;
+}
+
+.oprph_sum_col1 {
+    width: 200px !important;
+}
+
+.oprph_sum_col2 {
+    width: 75px !important;
+}
+
+.orph_col2 {
+    width: 300px !important;
+}
+
+.orph_col3 {
+    width: 300px !important;
+}

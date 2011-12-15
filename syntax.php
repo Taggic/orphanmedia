@@ -5,202 +5,37 @@
  * @license    GPL 2 (http://www.gnu.org/licenses/gpl.html)
  * @author     <taggic@t-online.de>
  */
-
- 
+/******************************************************************************/ 
 if(!defined('DOKU_INC')) define('DOKU_INC',realpath(dirname(__FILE__).'/../../').'/');
 if(!defined('DOKU_PLUGIN')) define('DOKU_PLUGIN',DOKU_INC.'lib/plugins/');
-require_once(DOKU_PLUGIN.'syntax.php');
-require_once(DOKU_INC.'inc/html.php'); 
+if(!defined('DOKU_PAGES')) define('DOKU_PAGES',DOKU_INC.'data/pages/');
+if(!defined('DOKU_MEDIA')) define('DOKU_MEDIA',DOKU_INC.'data/media/');
 require_once(DOKU_INC.'inc/search.php');
- 
-define('DEBUG', 0);
-//---------------------------------------------------------------------------------------
-    // flatten the hierarchical arry to store path + file at first "column"
-    function array_flat($array) {   
-        $out=array();
-        foreach($array as $k=>$v){  
-            if(is_array($array[$k]))  { $out=array_merge($out,array_flat($array[$k])); }
-            else  { $out[]=$v; }
-        }     
-        return $out;
-    }
-
-    function clean_link($xBody)
-    {
-    // cut the two leading '{{'
-         $xBody=ltrim($xBody, '{');
-         //cut questionmark and further characters if exist
-         if (strpos($xBody, '?') > 0) { $xBody = substr($xBody,0, strpos($xBody, '?')); }
-         // sometimes a blank remains at the end to be cut
-         $xBody = str_replace(" ", '' ,$xBody);
-         //cut pipe and further characters if pipe exist
-         if (strpos($xBody, '|') > 0) { $xBody = substr($xBody,0, strpos($xBody, '|')); }
-         if (strpos($xBody, '}}') > 0) { $xBody = substr($xBody,0, strpos($xBody, '}}')); }
-         return $xBody; 
-    }
-    
-// ---------------------------------------------------------------
-
-    function case1_good_output($c1_medialist,$img)
-    {
-        $i1 = 0; 
-        foreach($c1_medialist as $afile) {
-            $i1++;                                                                                         
-            $output.= '<tr><td class="col0 centeralign"><a href="' . DOKU_URL . '/lib/plugins/orphanmedia/images/' . $img 
-                  . '"><img src="' . DOKU_URL . '/lib/plugins/orphanmedia/images/' . $img 
-                  . '" class="media" alt="orphan Media File" /></a></td>'
-                  . '<td>'. $i1 . '</td><td>' . $afile . '</td></tr>';
-        }             
-        $output.= '</td></tr></table>';        
-        return $output;
-    }
- 
-// --------------------------------------------------------------- 
-// ---------------------------------------------------------------
-/**
+/******************************************************************************
  * All DokuWiki plugins to extend the parser/rendering mechanism
  * need to inherit from this class
  */
 class syntax_plugin_orphanmedia extends DokuWiki_Syntax_Plugin {
-
-   /**
-    * Get an associative array with plugin info.
-    *
-    * <p>
-    * The returned array holds the following fields:
-    * <dl>
-    * <dt>author</dt><dd>Author of the plugin</dd>
-    * <dt>email</dt><dd>Email address to contact the author</dd>
-    * <dt>date</dt><dd>Last modified date of the plugin in
-    * <tt>YYYY-MM-DD</tt> format</dd>
-    * <dt>name</dt><dd>Name of the plugin</dd>
-    * <dt>desc</dt><dd>Short description of the plugin (Text only)</dd>
-    * <dt>url</dt><dd>Website with more information on the plugin
-    * (eg. syntax description)</dd>
-    * </dl>
-    * @param none
-    * @return Array Information about this plugin class.
-    * @public
-    * @static
-    */
-    /**
-     * return some info
-     */
+/******************************************************************************/
+/* return some info
+*/
     function getInfo(){
-        return array(
-            'author' => 'Taggic',
-            'email'  => 'Taggic@t-online.de',
-            'date'   => @file_get_contents(dirname(__FILE__) . '/VERSION'),
-            'name'   => 'OrphanMedia Plugin',
-            'desc'   => 'Display orphan and missing media files.
-            syntax ~~ORPHANMEDIA:all|summary|missing|orphan~~' ,
-            'url'    => 'http://dokuwiki.org/plugin:orphanmedia',
-        );
-    }
-// --------------------------------------------------------------- 
-
-   /**
-    * Get the type of syntax this plugin defines.
-    *
-    * @param none
-    * @return String <tt>'substition'</tt> (i.e. 'substitution').
-    * @public
-    * @static
-    */
-    function getType(){
-        return 'substition';
-    }
-	
-    /**
-     * What kind of syntax do we allow (optional)
-     */
-//    function getAllowedTypes() {
-//        return array();
-//    }
-   
-   /**
-    * Define how this plugin is handled regarding paragraphs.
-    *
-    * <p>
-    * This method is important for correct XHTML nesting. It returns
-    * one of the following values:
-    * </p>
-    * <dl>
-    * <dt>normal</dt><dd>The plugin can be used inside paragraphs.</dd>
-    * <dt>block</dt><dd>Open paragraphs need to be closed before
-    * plugin output.</dd>
-    * <dt>stack</dt><dd>Special case: Plugin wraps other paragraphs.</dd>
-    * </dl>
-    * @param none
-    * @return String <tt>'block'</tt>.
-    * @public
-    * @static
-    */
-    function getPType(){
-        return 'normal';
+        return confToHash(dirname(__FILE__).'/plugin.info.txt');
     }
 
-   /**
-    * Where to sort in?
-    *
-    * @param none
-    * @return Integer <tt>6</tt>.
-    * @public
-    * @static
-    */
-    function getSort(){
-        return 999;
-    }
-
-
-   /**
-    * Connect lookup pattern to lexer.
-    *
-    * @param $aMode String The desired rendermode.
-    * @return none
-    * @public
-    * @see render()
-    */
+    function getType() { return 'substition';}
+    function getPType(){ return 'block';}
+    function getSort() { return 999;}
+    
+/******************************************************************************/
+/* Connect pattern to lexer
+*/
     function connectTo($mode) {
         $this->Lexer->addSpecialPattern('~~ORPHANMEDIA:[0-9a-zA-Z_:!]+~~',$mode,'plugin_orphanmedia');
-//      $this->Lexer->addSpecialPattern('<TEST>',$mode,'plugin_test');
-//      $this->Lexer->addEntryPattern('<TEST>',$mode,'plugin_test');
     }
-	
-//    function postConnect() {
-//      $this->Lexer->addExitPattern('</TEST>','plugin_test');
-//    }
-
-
-   /**
-    * Handler to prepare matched data for the rendering process.
-    *
-    * <p>
-    * The <tt>$aState</tt> parameter gives the type of pattern
-    * which triggered the call to this method:
-    * </p>
-    * <dl>
-    * <dt>DOKU_LEXER_ENTER</dt>
-    * <dd>a pattern set by <tt>addEntryPattern()</tt></dd>
-    * <dt>DOKU_LEXER_MATCHED</dt>
-    * <dd>a pattern set by <tt>addPattern()</tt></dd>
-    * <dt>DOKU_LEXER_EXIT</dt>
-    * <dd> a pattern set by <tt>addExitPattern()</tt></dd>
-    * <dt>DOKU_LEXER_SPECIAL</dt>
-    * <dd>a pattern set by <tt>addSpecialPattern()</tt></dd>
-    * <dt>DOKU_LEXER_UNMATCHED</dt>
-    * <dd>ordinary text encountered within the plugin's syntax mode
-    * which doesn't match any pattern.</dd>
-    * </dl>
-    * @param $aMatch String The text matched by the patterns.
-    * @param $aState Integer The lexer state for the match.
-    * @param $aPos Integer The character position of the matched text.
-    * @param $aHandler Object Reference to the Doku_Handler object.
-    * @return Integer The current lexer state for the match.
-    * @public
-    * @see render()
-    * @static
-    */
+/******************************************************************************/
+/* Handle the match
+*/
     function handle($match, $state, $pos, &$handler){
         $match_array = array();
         //strip ~~ORPHANMEDIA: from start and ~~ from end
@@ -213,263 +48,434 @@ class syntax_plugin_orphanmedia extends DokuWiki_Syntax_Plugin {
         return $match_array;
     }
 
-   /**
-    * Handle the actual output creation.
-    *
-    * <p>
-    * The method checks for the given <tt>$aFormat</tt> and returns
-    * <tt>FALSE</tt> when a format isn't supported. <tt>$aRenderer</tt>
-    * contains a reference to the renderer object which is currently
-    * handling the rendering. The contents of <tt>$aData</tt> is the
-    * return value of the <tt>handle()</tt> method.
-    * </p>
-    * @param $aFormat String The output format to generate.
-    * @param $aRenderer Object A reference to the renderer object.
-    * @param $aData Array The data created by the <tt>handle()</tt>
-    * method.
-    * @return Boolean <tt>TRUE</tt> if rendered successfully, or
-    * <tt>FALSE</tt> otherwise.
-    * @public
-    * @see handle()
-    */
-// --------------------------------------------------------------- 
-     // Create output
-     function render($format, &$renderer, $data) {
-        global $INFO, $conf;
-        
-        // Filter by Extension ----------------------
-        $defFileTypes = explode(':',$data[0]); // split use case entry and file extensions
-        $data[0] = $defFileTypes[0]; // store pure use case entry back to data
-        unset($defFileTypes[0]); // delete the use case entry
+/******************************************************************************/
+/* Create output 
+*/
+    function render($format, &$renderer, $data) {
 
-        if($format == 'xhtml'){ 
+        if($format !== 'xhtml'){ return false; }  // cancel if not xhtml
+            global $INFO, $conf;
+            
+            // Media Filter by Extension ---------------------------------------
+            $defFileTypes = explode(':',$data[0]); // split use case entry and file extensions
+            $data[0] = $defFileTypes[0]; // store pure use case entry back to data
+            unset($defFileTypes[0]); // delete the use case entry to keep file extensions only
+            $defFileTypes2 = implode(', ',$defFileTypes); // just for output the filter on summary
+            $defFileTypes = implode('',$defFileTypes); // string of file extensions to easily compare it by strpos
+            if($defFileTypes2==false) $defFileTypes2='none';
+            // -----------------------------------------------------------------
             // $data is an array
-            // $data[0] is the report type
-            // $data[1]..[x] are excluded namespaces
-            //handle choices
-            switch ($data[0]){    
-                case ('all' || 'missing' || 'orphan' || 'summary'):       
-                    $renderer->doc .= $this->all_media_pages($data, $defFileTypes);
-                    break;
-                default:
-                  $renderer->doc .= '<b>' . htmlspecialchars($data[0]) . "ORPHANMEDIA syntax error</b>";
-            }    
-             return true;
-        }
-        return false;
-     }
-// ---------------------------------------------------------------
-    function all_media_pages($params_array, $defFileTypes) {
-                     
-      global $conf;
-      $data = array();
-      $result = '';
-      $operator = 1;
+            // $data[0] is the report type: 'all' or 'valid' or 'missing' or 'orphan' or 'summary'
+            // $defFileTypes is string of excluded media file types
 
-           
-  // 1. load all media files into array
-      // create an array of all media files incl. path   
-      $delim = 'all';
-      clearstatcache();
-      $listMediaFiles = $this->list_files_in_array($conf['mediadir'], $delim, $nothing);
-      $listMediaFiles = array_flat($listMediaFiles);
-      $media_file_counter = count($listMediaFiles);
-      sort($listMediaFiles);
-      $c1_medialist = $listMediaFiles;       // result array for Case 1:  check if page refrenced media exist at media directory
-      $count_medialist_array = count($listMediaFiles);
-      
-  // 2. load all page files into array
-     // create an array of all page files incl. path   
-     $delim = ".txt";
-     clearstatcache();
-     $listPageFiles = $this->list_files_in_array($conf['datadir'], $delim, $params_array);
-     $xArray =array();
-     $listPageFiles = array_flat($listPageFiles);
-     sort($listPageFiles);
-     $page_counter = count($listPageFiles);
-     
-  // 3. loop through page-> media links and media list
-    foreach($listPageFiles as &$page_filepath) {                            
-                  
-         //read the content of the page file to be analyzed for media links
-         $body = '';
-         $body = file_get_contents($page_filepath);
-          
-       
-//        echo var_dump($defFileTypes).'<br />';
 
-         // 4. find all page-> media links defined by Link pattern into $links
-         $links = array();
-//         define('LINK_PATTERN', "/\{\{.*\}\}/"); 
-         define('LINK_PATTERN', "/\{\{(?!.*\x3E).*\}\}/");
-         if( preg_match(LINK_PATTERN, $body) ) {
-             preg_match_all(LINK_PATTERN, $body, $links);
-             $links = array_flat($links);
-         }
-         if (count($links)<1) continue;
-         // 5. loop through all link matches of this $current_page_filepath
-         $media_links_array = array();
-         foreach($links as $media_link) {                           
-             // split $lBody if more than one media link caught at once
-             $media_links_array = array_merge($media_links_array, preg_split ('/{{/', $media_link));
-         }
-         $media_links_array = array_unique($media_links_array);
-         
-         // 6. loop through page-> media link array ($lBody_array) and prepare links
-         foreach($media_links_array as $media_link) {
-             if(strlen($media_link)<3) continue;
-          // ---------------------------------------------------------------
-             $media_link = clean_link($media_link);
-          // ---------------------------------------------------------------  
-             // exclude http, tag and topic links
-             if((strlen($media_link)>1) && strpos($media_link, "://")<1 && strpos($media_link, "tag>")<1 
-              && strpos($media_link, "topic>")<1  && strpos($media_link, "blog>")<1   
-              && strpos($media_link, "wikistatistics>")<1) {
-             
-                  $page_filepath = $page_filepath . "|" . strtolower($media_link);
-             }
-             if(strlen($media_link)>0) $tmp_link_counter++;
-         }
-    }
-     
-//  $params_array[0] = 'all' || 'summary' || 'orphan' || 'missing'  <- one of that is mandatory
-    switch ($params_array[0]){
-// ---------------------------------------------------------------------------//
-//   Case 1: check for 100% orphan media files                                //
-//           => media filename is referenced nowhere                          //
-//           Weakpoint: identical media filenames (e.g. multiple image001.gif)//
-// ---------------------------------------------------------------------------//
-    case ('all' || 'summary' || 'orphan'):    
-       // 1.1 loop through media file list to find direct links
-      $a_counter = 0;
-      $b_counter = 0;
-      $c_counter = 0;
-      $d_counter = 0;
-      $mediareferences = array();
-      
-      foreach($c1_medialist as $media_file) { 
-         // Filter by Extension ----------------------
-         // check if a file type was defined what is the only one to be considered
-         if(count($defFileTypes) > 0) {
-            // step over to next file if media_file extension is not equal to one of $defFileTypes
-            $blinker = false;
-            $ext = pathinfo($media_file);
-            foreach($defFileTypes as $defFileType) {
-                if ($defFileType===$ext['extension']) {
-                  $blinker=true;
-                  break;
-                }
-            }
-            if ($blinker === false) continue ; // with next $media_file          
-         }
-         
-         $checkFlag = FALSE;
-         $c_counter++;
-         // 1.2 loop page files 
-         foreach($listPageFiles as $x_link) { 
-              
-//              echo sprintf("<p><b>%s</b></p>\n", strtolower($x_link) . ' ==> ' . strtolower(basename($media_file)));
-                               
-              // 1.3 check if media filename exist at page media links 
-              if(strpos(strtolower($x_link),strtolower(basename($media_file)))>1) {
-                  $checkFlag = TRUE;
-                  $a_counter++; 
-                  break;
-              }              
-         }
-         // all pages checked with current media filename
-         if($checkFlag === FALSE) {
-            //extract media path and media filename
-            $m_filename = basename($media_file);
+// -----------------------------------------------------------------------------
+// ! CHECK: Where are the excluded namespaces ?
+// -----------------------------------------------------------------------------            
             
-            //cut everything before incl. "media"
-            $y_pos=strpos($media_file, "media");
-            $t1 = substr($media_file, $y_pos + 5);
-            $len_m_filename = strlen($m_filename);
-            $m_path = substr($t1, 0, -$len_m_filename);
+            // retrive all media files
+            $listMediaFiles     = array();
+            $listMediaFiles     = $this->_get_allMediaFiles($conf['mediadir'], $defFileTypes);
+            $listMediaFiles     = $this->array_flat($listMediaFiles);
+            $media_file_counter = count($listMediaFiles);
+
+            // retrieve all page files
+            $listPageFiles = array();
+            $listPageFiles = $this->_get_allPageFiles($conf['datadir']);
+            $listPageFiles = $this->array_flat($listPageFiles);
+            $page_counter  = count($listPageFiles);
             
-            // /lib/exe/fetch.php?media=namespace/image.jpg&w=100
-            // /_media/namespace/image.jpg?w=100
-            if(strlen($m_path)>1) {
-                $rt1 = $m_path . $m_filename;
-                $rt2 = str_replace("/", ":", $m_path . $m_filename);
-            }
-            else {
-                $rt1 = $m_filename;
-                $rt2 = ":" . $m_filename;
-            }
-   
-            //echo sprintf("<p><b>%s</b></p>\n", $rt1);
-
-            $picturepreview = '<a href="' . DOKU_URL . 'lib/exe/detail.php?media=' . $rt2  
-                              . '" class="media" title="'. $m_filename  
-                              . '"><img src="'. DOKU_URL . 'lib/exe/fetch.php?media=' . $rt2 
-                              . '&w=100" class="media" alt="' . $m_filename . '" /></a>';  
-
-            $orphan_Media_Files[] = $m_path . $m_filename . "</td><td>" . $picturepreview;
-            $b_counter++;
+            // retrieve all media links per page file
+            $listPageFile_MediaLinks = array();
+            $listPageFile_MediaLinks = $this->_get_allMediaLinks($listPageFiles, $defFileTypes);
+//            echo sprintf("<p>%s</p>\n", var_dump($listPageFile_MediaLinks));
+            
+            // analyse matches of media files and pages->media links
+            $doku_media = str_replace("\\","/",DOKU_MEDIA);
+            $doku_pages = str_replace("\\","/",DOKU_PAGES);
+            
+            $listMediaFiles = array($listMediaFiles,array_pad(array(),count($listMediaFiles),'0'));
+            $position = 0;
                         
-         }
-      }
+            foreach($listMediaFiles[0] as &$media_file_path) {
+              // strip ...dokuwiki/data/media path
+              $media_file_path = str_replace("\\","/",$media_file_path);
+              $media_file_path = str_replace($doku_media,"",$media_file_path);
+              
+              // 1. direct matches where pages->media links are identical to media file path
+              foreach($listPageFile_MediaLinks as &$perPage_MediaLinks) {
+                  for($i = 1; $i < count($perPage_MediaLinks); $i++) {
+                      $perPage_MediaLinks[$i] = str_replace(":","/",$perPage_MediaLinks[$i]);
+                      // strip initial slash if exist
+                      if(strpos($perPage_MediaLinks[$i],"/") === 0)  $perPage_MediaLinks[$i] = ltrim($perPage_MediaLinks[$i],"/");
+                      
+                      // case 1: find full qualified links: Page_MediaLink = media_file path
+                      if($perPage_MediaLinks[$i] === $media_file_path) {
+                          $perPage_MediaLinks[$i] .= "|valid";
+                          $listMediaFiles[1][$position] = "found";                         
+                          continue;
+                      }
 
-// ---------------------------------------------------------------------------//
-//   Case 2: check for missing media files                                    //
-//          (page links to not existing media file)                           //
-// ---------------------------------------------------------------------------//
-    case ('all' || 'summary' || 'missing'):    
-      $e_counter = 0;
-      
-      // 2.1 loop page files
-      foreach($listPageFiles as $x_link) {
-          // $x_array[0]        = page_file (path + filename)
-          // $x_array[1 ... n]  = media links
-          $x_array = explode('|', $x_link);
-          
-          // 2.2 loop media links of current page file
-          foreach ($x_array as $tst) {
-              // ignore page file at $x_array[0]
-              if($tst == $x_array[0]) continue;
-              // ignore empty links
-              if(strlen($tst)<3) continue;
-              $m_link = str_replace(":", '/' ,$tst);
-              $m_link = str_replace("//", '/' ,$m_link);
-              $checkFlag = FALSE;
-
-             // Filter by Extension ----------------------
-             // check if a $tst file extesion was defined what is the only one to be considered
-             $blinker = true;
-             if(count($defFileTypes) > 0) {
-                // step over to next file if $tst extension is not equal to one of $defFileTypes
-                $blinker = false;
-                $ext = pathinfo($m_link);
-                foreach($defFileTypes as $defFileType) {
-                    if ($defFileType===$ext['extension']) {
-                      $blinker = true;
-                      break;
+                      // case 2: find relative links: Page_path + Page_MediaLink = media_file path
+                      //example: Page = tst:start with a media link syntax like {{picture}} = mediafile(tst:picture)
+                      if((strpos($perPage_MediaLinks[$i],"|valid")===false) && (strpos($perPage_MediaLinks[$i],"|relative")===false)) {
+                          $pagePath = rtrim($perPage_MediaLinks[0],end(explode("/",$perPage_MediaLinks[0] ))).$perPage_MediaLinks[$i];
+                          // strip ...dokuwiki/data/pages path
+                          $pagePath = str_replace("\\","/",$pagePath);
+                          $pagePath = str_replace($doku_pages,"",$pagePath);
+                          //echo $pagePath.'<br />';
+                          if($pagePath === $media_file_path) {
+                              $perPage_MediaLinks[$i] .= "|relative";
+                              $listMediaFiles[1][$position] = "found";                         
+                              continue;
+                          }
+                      }
+                      
+                  }
+              }
+              $position++;
+            }
+            // 2. missing media files
+            $ok_img = "ok.png";
+            $nok_img= "nok.png";
+            if(strlen($defFileTypes) > 1) $filterInfo.= '<span>Filter settings: '.$defFileTypes.'<br />';
+            $output_valid = '<div class="level1">'.
+                              '  <span>The following existing media files are referenced by full qualified path:</span><br />'.
+                              '<table class="inline">'.
+                              '<tr><th  class="orph_col0 centeralign">i</th>
+                                   <th  class="orph_col1 centeralign">#</th>
+                                   <th  class="orph_col2 centeralign"> Page files </th>
+                                   <th  class="orph_col3 centeralign"> valid Media </th></tr>';   
+            $output_relative = '<div class="level1">'.
+                              '  <span>The following existing media files are referenced by relative path:</span><br />'.
+                              '<table class="inline">'.
+                              '<tr><th  class="orph_col0 centeralign">i</th>
+                                   <th  class="orph_col1 centeralign">#</th>
+                                   <th  class="orph_col2 centeralign"> Page files </th>
+                                   <th  class="orph_col3 centeralign"> relative Media </th></tr>';
+            $output_missing = '<div class="level1">'.
+                              '  <span>The following media files are missing:</span><br />'.
+                              '<table class="inline">'.
+                              '<tr><th  class="orph_col0 centeralign">i</th>
+                                   <th  class="orph_col1 centeralign">#</th>
+                                   <th  class="orph_col2 centeralign"> Page files </th>
+                                   <th  class="orph_col3 centeralign"> missing Media </th></tr>';
+            $output_orphan = '<div class="level1">'.
+                              '  <span>The following media files are orphan:</span><br />'.
+                              '<table class="inline">'.
+                              '<tr><th  class="orph_col0 centeralign">i</th>
+                                   <th  class="orph_col1 centeralign">#</th>
+                                   <th  class="orph_col2 centeralign"> Page files </th>
+                                   <th  class="orph_col3 centeralign"> orphan Media </th></tr>';
+                              
+            foreach($listPageFile_MediaLinks as $perPage_MediaLinks) {
+                for($i = 1; $i < count($perPage_MediaLinks); $i++) {
+                    $refLink_counter ++;
+                    if((strpos($perPage_MediaLinks[$i],"|valid")>0)) {
+                        $valid_counter++;
+                        $output_valid .= $this->_prepare_output(rtrim($perPage_MediaLinks[$i],"|valid"),$perPage_MediaLinks[0],$ok_img,$valid_counter);
+                    }
+                    if((strpos($perPage_MediaLinks[$i],"|relative")>0)) {
+                        $relative_counter++;
+                        $output_relative .= $this->_prepare_output(rtrim($perPage_MediaLinks[$i],"|relative"),$perPage_MediaLinks[0],$ok_img,$relative_counter);
+                    }
+                    if((strpos($perPage_MediaLinks[$i],"|valid")===false) && (strpos($perPage_MediaLinks[$i],"|relative")===false)) {
+                        $missing_counter++;
+                        $output_missing .= $this->_prepare_output($perPage_MediaLinks[$i],$perPage_MediaLinks[0],$nok_img,$missing_counter);
                     }
                 }
+            }
+            
+            $position = 0;            
+            foreach($listMediaFiles[1] as $check) {
+                if($check === '0') {
+                  $orphan_counter++;
+                  $rt2 = str_replace("/", ":", $listMediaFiles[0][$position]);
+                  $picturepreview = '<a href="' . DOKU_URL . 'lib/exe/detail.php?media=' . $rt2  
+                              . '" class="media" title="'. $listMediaFiles[0][$position]  
+                              . '"><img src="'. DOKU_URL . 'lib/exe/fetch.php?media=' . $rt2 
+                              . '&w=100" class="media" alt="' . $listMediaFiles[0][$position] . '" /></a>';
+                  
+                  $output_orphan .= '<tr>'.NL.
+                              '<td>'.NL.
+                                  '<img src="'.DOKU_URL.'\/lib\/plugins\/orphanmedia\/images\/'.$nok_img.'" alt="nok" title="orphan" align="middle" />'.NL.
+                              '</td>'.NL.
+                              '<td>'.$orphan_counter.'</td>'.NL.
+                              '<td>'.$listMediaFiles[0][$position].'</td>'.NL.
+                              '<td>'.$picturepreview.'</td>'.NL.'</tr>'.NL;
+                }
+                $position++;  
+            }
+
+            $output_valid    .= '</table></div>';
+            $output_relative .= '</table></div>';
+            $output_missing  .= '</table></div>';
+            $output_orphan   .= '</table></div>';
+            $output_summary = '<div class="level1">'.NL.
+                              '  <span class="orph_sum_head">Summary</span><br />'.NL.
+                              '<table class="oprph_sum_tbl">'.NL.
+                              ' <tr>'.NL.
+                              '   <td class="oprph_sum_col0" rowspan="8">&nbsp;</td>'.NL.
+                              '   <td class="oprph_sum_col1">Page files</td>'.NL.
+                              '   <td class="oprph_sum_col2">'.$page_counter.'</td>'.NL.
+                              ' </tr>'.NL.
+                              ' <tr>'.NL.
+                              '   <td>Media files</td>'.NL.
+                              '   <td>'.$media_file_counter.'</td>'.NL.
+                              ' </tr>'.NL.
+                              ' <tr>'.NL.
+                              '   <td>Media references</td>'.NL.
+                              '   <td>'.$refLink_counter.'</td>'.NL.
+                              ' </tr>'.NL.
+                              ' <tr>'.NL.
+                              '   <td>Filter</td>'.NL.
+                              '   <td>'.$defFileTypes2.'</td>'.NL.
+                              ' </tr>'.NL.
+                              ' <tr>'.NL.
+                              '   <td><b>Valid</b>, qualified references</td>'.NL.
+                              '   <td>'.$valid_counter.'</td>'.NL.
+                              ' </tr>'.NL.
+                              ' <tr>'.NL.
+                              '   <td><b>Valid</b>, relative references</td>'.NL.
+                              '   <td>'.$relative_counter.'</td>'.NL.
+                              ' </tr>'.NL.
+                              ' <tr>'.NL.
+                              '   <td><b>Missing</b> media files</td>'.NL.
+                              '   <td>'.$missing_counter.'</td>'.NL.
+                              ' </tr>'.NL.
+                              ' <tr>'.NL.
+                              '   <td><b>Orphan</b> media files</td>'.NL.
+                              '   <td>'.$orphan_counter.'</td>'.NL.
+                              ' </tr>'.NL.
+                              '</table></div>'.NL; 
+
+
+            if((stristr($data[0], "valid")===false) && (stristr($data[0], "all")===false)){
+                $output_valid='';
+            }
+            if((stristr($data[0], "relative")===false) && (stristr($data[0], "all")===false)){
+                $output_relative='';
+            }
+            if((stristr($data[0], "missing")===false) && (stristr($data[0], "all")===false)){
+                $output_missing='';
+            }
+            if((stristr($data[0], "orphan")===false) && (stristr($data[0], "all")===false)){
+                $output_orphan='';
+            }
+            
+            $renderer->doc .= $output_summary.$output_valid.$output_relative.$output_missing.$output_orphan;          
+
+            return true;
+    }
+/******************************************************************************/
+/* loop through media directory and collect all media files 
+/* consider: filter for media file extension if given 
+*/ 
+    function _get_allMediaFiles($dir, $defFileTypes) {
+        $listDir = array();
+        if(is_dir($dir)) { 
+            if($handler = opendir($dir)) { 
+                while (FALSE !== ($sub = readdir($handler))) { 
+                    if ($sub !== "." && $sub !== "..") { 
+                        if(is_file($dir."/".$sub)) {   
+                            //get the current file extension ---------------------
+                            $parts = explode(".", $sub);
+                            if (is_array($parts) && count($parts) > 1) {
+                                 $extension = end($parts);
+                                 $extension = ltrim($extension, ".");
+                            }
+                            //-------------------------------------------- 
+                            if($defFileTypes === '') {
+                                $listDir[] = $dir."/".$sub;
+                                //echo sprintf("<p><b>%s</b></p>\n", $dir."/".$sub);
+                            } 
+                            // if media file extension filters are set on syntax line the $defFileTypes containing a string of all
+                            // and is the string to search the currnt file extension in 
+                            elseif(strpos($defFileTypes, $extension)!==false) {
+                                $listDir[] = $dir."/".$sub;
+                                //echo sprintf("<p><b>%s</b></p>\n", $dir."/".$sub);
+                            }
+                        }
+                        elseif(is_dir($dir."/".$sub)) { 
+                            $listDir[$sub] = $this->_get_allMediaFiles($dir."/".$sub, $defFileTypes);
+                            //echo sprintf("<p><b>%s</b></p>\n", $dir."/".$sub);;
+                        } 
+                    } 
+                }    
+                closedir($handler); 
+            }
+        }
+        return $listDir;    
+    }    
+/******************************************************************************/
+/* loop through data/pages directory and collect all page files 
+*/ 
+    function _get_allPageFiles($dir) {
+        $listDir = array();
+        if(is_dir($dir)) {
+            if($handler = opendir($dir)) { 
+                while (FALSE !== ($sub = readdir($handler))) { 
+                    if ($sub !== "." && $sub !== "..") { 
+                        if(is_file($dir."/".$sub)) {   
+                            //get the current file extension ---------------------
+                            $parts = explode(".", $sub);
+                            if (is_array($parts) && count($parts) > 1) {
+                                 $extension = end($parts);
+                                 $extension = ltrim($extension, ".");
+                            }
+                            //-------------------------------------------- 
+                            if(($extension === "txt")){
+                                $listDir[] = $dir."/".$sub;
+                                //echo sprintf("<p><b>%s</b></p>\n", $dir."/".$sub); 
+                              }
+                        }
+                        elseif(is_dir($dir."/".$sub)) { 
+                            $listDir[$sub] = $this->_get_allPageFiles($dir."/".$sub, $delim,$excludes);
+                        } 
+                    } 
+                }    
+                closedir($handler); 
+            } 
+        }
+        return $listDir;    
+    }    
+
+/******************************************************************************/
+/* loop through pages and extract their media links 
+*/ 
+    function _get_allMediaLinks($listPageFiles, $defFileTypes) {
+        $_all_links = array();
+        $pageCounter = 0;
+        $linkCounter = 1;
+        foreach($listPageFiles as $page_filepath) {
+            $_all_links[$pageCounter][0] = $page_filepath;
+            // read the content of the page file to be analyzed for media links
+            $body = file_get_contents($page_filepath);
+            
+            // find all page-> media links defined by Link pattern into $links
+             $links = array(); 
+             define('LINK_PATTERN', "/\{\{(?!.*\x3E).*\}\}/");
+             if( preg_match(LINK_PATTERN, $body) ) {
+                 preg_match_all(LINK_PATTERN, $body, $links);
+                 $links = $this->array_flat($links);
+             }
+            // exception for flashplayer plugin where file reference is not inside curly brackets
+            // <flashplayer width=610 height=480>file=/doku/_media/foo/bar.flv&autostart=true</flashplayer>
+            $flashpl_links = array();
+            define('LINK_PATTERNtwo', "/<flashplayer(?!.>).*<\/flashplayer>/");
+            if( preg_match(LINK_PATTERNtwo, $body) ) {
+                preg_match_all(LINK_PATTERNtwo, $body, $flashpl_links);
+                $flashpl_links = $this->array_flat($flashpl_links);
+            }
+
+            // loop through page-> media link array and prepare links
+            foreach($links as $media_link) {
+                // exclude http, tag and topic links
+                if(strlen($media_link)<3) continue;
+                if(stristr($media_link, "http:")!==false) continue;
+                if(stristr($media_link, "tag>")!==false) continue;
+                if(stristr($media_link, "blog>")!==false) continue;
+                if(stristr($media_link, "topic>")!==false) continue;
+                if(stristr($media_link, "wikistatistics>")!==false) continue;
+            // ---------------------------------------------------------------
+                $media_link = $this->clean_link($media_link);
+            // ---------------------------------------------------------------  
+
+                // filter according $defFileTypes
+                if($defFileTypes !==""){
+                    $parts = explode(".", $media_link);
+                    if (is_array($parts) && count($parts) > 1) {
+                       $extension = end($parts);
+                       $extension = ltrim($extension, ".");
+                    }
+                  if(stristr($defFileTypes, $extension)===false) continue;
+                }
+                
+                // collect all media links of the current page
+                //$page_filepath .= "|" . strtolower($media_link);
+                $_all_links[$pageCounter][$linkCounter] = strtolower($media_link);
+                $linkCounter++;
              }
              
-             // Filter by Extension ----------------------
-             if ($blinker === true) {
-                // 2.3 loop media files
-                foreach($c1_medialist as $media_file) {
-                    // 2.4 compare media link and media files
-                    if(strpos(strtolower($media_file), strtolower($m_link))>0) {
-                        $checkFlag = TRUE;
-                        // link targets to existing file, continue with next link
-                        break;
+             // loop through page-> flashplayer link array and prepare links         
+             foreach($flashpl_links as $flashpl_link) {
+                if(strlen($flashpl_link)<3) continue;
+              // ---------------------------------------------------------------
+                $flashpl_link = $this->clean_flash($flashpl_link);
+              // ---------------------------------------------------------------  
+                // filter according $defFileTypes
+                if($defFileTypes !==""){
+                    $parts = explode(".", $flashpl_link);
+                    if (is_array($parts) && count($parts) > 1) {
+                       $extension = end($parts);
+                       $extension = ltrim($extension, ".");
                     }
+                  if(stristr($defFileTypes, $extension)===false) continue;
                 }
 
-               // all media files checked with current media link from current page
-                if($checkFlag === FALSE) {
+                // exclude external flashplayer links
+                if((strlen($flashpl_link)>1) && strpos($flashpl_link, "://")<1) {
+                     // collect all flashplayer links of the current page
+                     $_all_links[$pageCounter][$linkCounter] = strtolower($flashpl_link);
+                     $linkCounter++;
+                }
+             }
+            // do merge media and flashplayer arrays
+            // $page_filepath string does already contain all local media and flashplayer links separated by "|"
+            //$page_filepath = preg_replace(":","/",$page_filepath);
+            //$page_filepath = preg_replace("|","<br />",$page_filepath);            
+//            echo var_dump($_all_links[$pageCounter]).'<br />';
+            $pageCounter++;
+            $linkCounter = 1;
+        }
+        
+        return $_all_links;
+    }
+//---------------------------------------------------------------------------------------
+    // flatten the hierarchical arry to store path + file at first "column"
+    function array_flat($array) {   
+        $out=array();
+        foreach($array as $k=>$v){  
+            if(is_array($array[$k]))  { $out=array_merge($out,$this->array_flat($array[$k])); }
+            else  { $out[]=$v; }
+        }     
+        return $out;
+    }
+//---------------------------------------------------------------------------------------
+    function clean_link($xBody)
+    {
+      // cut the two leading '{{'
+         $xBody=ltrim($xBody, '{');
+         //cut questionmark and further characters if exist
+         if (strpos($xBody, '?') > 0) { $xBody = substr($xBody,0, strpos($xBody, '?')); }
+         // sometimes a blank remains at the end to be cut
+         $xBody = str_replace(" ", '' ,$xBody);
+         //cut pipe and further characters if pipe exist
+         if (strpos($xBody, '|') > 0) { $xBody = substr($xBody,0, strpos($xBody, '|')); }
+         if (strpos($xBody, '}}') > 0) { $xBody = substr($xBody,0, strpos($xBody, '}}')); }
+         return $xBody; 
+    }
+//---------------------------------------------------------------------------------------
+    function clean_flash($xBody)
+    { // <flashplayer width=610 height=480>file=/doku/_media/foo/bar.flv&autostart=true</flashplayer>
+         //cut evrerything after ampersand (incl. ampersand)
+         if (strpos($xBody, '&') > 0) { $xBody = substr($xBody,0, strpos($xBody, '&')); }
+      // cut the leading 'file='
+         if (strpos($xBody, 'file') > 0) { $trimmed  = substr($xBody,strpos($xBody, 'file='),strlen($xBody)-strpos($xBody, 'file=')); }
+         if (strpos($trimmed, '=') > 0) { $trimmed2 = substr($trimmed,strpos($trimmed, '=')+1,strlen($trimmed)-strpos($trimmed, '=')); }
+//         echo $trimmed2.' , '.strpos($trimmed2, '/').'<br />';
+         return $trimmed2; 
+    }    
+// ---------------------------------------------------------------
+    function _prepare_output($m_link,$page,$img,$counter)
+    {
+            // all media files checked with current media link from current page
                     //extract page file name
-                    $p_filename = basename($x_array[0]);
+                    $p_filename = basename($page);
                     
                     //cut everything before pages/ from link
-                    $y_pos=strpos($x_array[0], "pages");
-                    $t1 = substr($x_array[0], $y_pos);
+                    $y_pos=strpos($page, "pages");
+                    $t1 = substr($page, $y_pos);
               
                     
                     $t1 = substr(str_replace( ".txt" , "" , $t1 ) , 5, 9999);
@@ -478,126 +484,17 @@ class syntax_plugin_orphanmedia extends DokuWiki_Syntax_Plugin {
                     $t2 = str_replace("/", ":", $t1);
                     $t2 = substr($t2, 1, strlen($t2));
                      
-                     $t1 = '<a class=wikilink1 href="'. DOKU_URL . "doku.php?id=" . $t2 . '" title="' . $t1 . '" rel="nofollow">' . $t1 . '</a>';                   
-    
-                    // store page file and media link for output
-                    $missing_Media_Files[] = $t1 . "</td><td>" . $m_link;
-                    $e_counter++;
-                }
-             }
-          }
-      }
-    }  
-//--------------------------------------------------------------------------------------------------------   
-      // Now show the result
-//--------------------------------------------------------------------------------------------------------   
-        $output = '';
-        // for valid html - need to close the <p> that is feed before this
-        $output .= '</p>';
-    switch ($params_array[0]){
-        case 'all':
-            $output.= '<h2><a name="summary" id="summary">Summary</a></h2>';
-            $output.= '<div class="level1">';
-            if(count($defFileTypes) > 0) $output.= '<span>Filter for: '.implode(', ',$defFileTypes).'<br />'; 
-            $output.= '<table class="inline"><tr><th>Summary Item</th><th>Quantity</th></tr>';
-            $output.= '<tr><td>Media list contains </td><td>'. $count_medialist_array . " files" . '</td></tr>';    
-            $output.= '<tr><td>Page list contains </td><td>'. $page_counter . " files" . '</td></tr>';    
-            $output.= '<tr><td>Found  media filename references </td><td>'. $a_counter . " in " . count($listPageFiles) . ' pages</td></tr>';    
-            $output.= '<tr><td>Different media links extracted from pages </td><td>'. $tmp_link_counter . '</td></tr>';    
-            $output.= '<tr><td>Missing media files detected </td><td>'. $e_counter . '</td></tr>';    
-            $output.= '<tr><td>Found orphan media files </td><td>'. $b_counter . '</td></tr>'; 
-            $output.= '</table></div>';   
-            
-            $output.= '<h2><a name="missing_media" id="missing_media">Missing Media Files</a></h2>';
-            $output.= '<div class="level1">';
-            $output.= '<p>The following media files are referenced within pages but the media files do not exist at defined path:</p>';    
-            $output.= '<table class="inline"><tr><th  class="col0 centeralign">i</th><th  class="col1 centeralign">#</th><th  class="col2 centeralign"> Page files </th><th  class="col3 centeralign"> missing Media </th></tr>';   
-            $img = "q.png";
-            if (count($missing_Media_Files)>=1)  $c2_output = case1_good_output($missing_Media_Files, $img);
-            $output .= $c2_output;                  
-            $output.= '</table></div>';   
-            
-            $output.= '<h2><a name="orphan_links" id="good_links">Orphan Media</a></h2><div class="level1">';
-            $output.= '<p>The following orphan media files were detected:</p>';    
-            $output.= '<table class="inline"><tr><th  class="col0 centeralign">i</th><th  class="col1 centeralign">#</th><th  class="col2 centeralign"> orphan Media </th><th  class="col3 centeralign"> Preview </th></tr>';   
-            $img = "nok.png";
-            if (count($orphan_Media_Files)>=1)  $c1_output = case1_good_output($orphan_Media_Files, $img);
-            $output .= $c1_output;                  
-            $output.= '</table></div>';   
-            break;
-        
-        case 'summary':    
-            $output.= '<div class="level1">';
-            if(count($defFileTypes) > 0) $output.= '<span>Filter for: '.implode(', ',$defFileTypes).'<br />'; 
-            $output.= '<table class="inline"><tr><th>Summary Item</th><th>Quantity</th></tr>'; 
-            $output.= '<tr><td>Media list contains </td><td>'. $count_medialist_array . " files" . '</td></tr>';    
-            $output.= '<tr><td>Page list contains </td><td>'. $page_counter . " files" . '</td></tr>';    
-            $output.= '<tr><td>Found  media filename references </td><td>'. $a_counter . " in " . count($listPageFiles) . ' pages</td></tr>';    
-            $output.= '<tr><td>Different media links extracted from pages </td><td>'. $tmp_link_counter . '</td></tr>';    
-            $output.= '<tr><td>Missing media files detected </td><td>'. $e_counter . '</td></tr>';    
-            $output.= '<tr><td>Found orphan media files </td><td>'. $b_counter . '</td></tr>'; 
-            $output.= '</table></div>';   
-            break;
-
-        case 'missing':
-            $output.= '<div class="level1">';
-            $output.= '<span>The following media files are referenced within pages but the media files do not exist at defined path:</span><br />';    
-            if(count($defFileTypes) > 0) $output.= '<span>Filter for: '.implode(', ',$defFileTypes).'<br />'; 
-            $output.= '<table class="inline"><tr><th  class="col0 centeralign">i</th><th  class="col1 centeralign">#</th><th  class="col2 centeralign"> Page files </th><th  class="col3 centeralign"> missing Media </th></tr>';   
-            $img = "q.png";
-            if (count($missing_Media_Files)>=1)  $c2_output = case1_good_output($missing_Media_Files, $img);
-            $output .= $c2_output;                  
-            $output.= '</table></div>';   
-            break;
-    
-        case 'orphan':
-            $output.= '<div class="level1">';
-            $output.= '<span>The following orphan media files were detected:</span><br />';    
-            if(count($defFileTypes) > 0) $output.= '<span>Filter for: '.implode(', ',$defFileTypes).'<br />'; 
-            $output.= '<table class="inline"><tr><th  class="col0 centeralign">i</th><th  class="col1 centeralign">#</th><th  class="col2 centeralign"> orphan Media </th><th  class="col3 centeralign"> Preview </th></tr>';   
-            $img = "nok.png";
-            if (count($orphan_Media_Files)>=1)  $c1_output = case1_good_output($orphan_Media_Files, $img);
-            $output .= $c1_output;                  
-            $output.= '</table></div>';   
-            break;
-  }    	
-        foreach($mediareferences as $link) {
-            echo sprintf("<p><b>%s</b></p>\n", printf($link));
-        }
-        //for valid html = need to reopen a <p>
-      	$output .= '<p>'; 
+                    $t1 = '<a class=wikilink1 href="'. DOKU_URL . "doku.php?id=" . $t2 . '" title="' . $t1 . '" rel="nofollow">' . $t1 . '</a>';                   
+                
+            $output.= '<tr>'.NL.
+                      '   <td class="col0 centeralign"><img src="'.DOKU_URL.'\/lib\/plugins\/orphanmedia\/images\/'.$img.'" align="middle" /></td>'.NL.
+                      '   <td>'.$counter.'</td>'.NL.
+                      '   <td>' . $t1 . "</td><td>" . $m_link . '</td>'.
+                      '</tr>'.NL;                   
         return $output;
     }
-//---------------------------------------------------------------------------------------
-    // search given directory recursively and store all files into array 
-    function list_files_in_array($dir, $delim, $excludes) 
-    { 
-        $max_count_files = 10;
-        $listDir = array(); 
-        if($handler = opendir($dir)) { 
-            while (FALSE !== ($sub = readdir($handler))) { 
-                if ($sub !== "." && $sub !== "..") { 
-                    if(is_file($dir."/".$sub)) {   
-                        $x = strpos(basename($dir."/".$sub),".txt");                        
-                        if(($delim === '.txt') && ($x > 0)){
-                            $listDir[] = $dir."/".$sub; 
-                          }            
-                        elseif($delim === 'all') {
-                            $listDir[] = $dir."/".$sub;
-                        } 
-                        //if(DEBUG) echo sprintf("<p><b>%s</b></p>\n", $dir."/".$sub);
-                    }
-                    elseif(is_dir($dir."/".$sub)) { 
-                        $listDir[$sub] = $this->list_files_in_array($dir."/".$sub, $delim,$excludes);
-                        //if(DEBUG) echo sprintf("<p><b>%s</b></p>\n", $dir."/".$sub);
-                    } 
-                } 
-            }    
-            closedir($handler); 
-        } 
-        return $listDir;    
-    }
-//---------------------------------------------------------------------------------------
+// --------------------------------------------------------------- 
+
 }
 //Setup VIM: ex: et ts=4 enc=utf-8 :
 ?>

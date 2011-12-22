@@ -347,27 +347,106 @@ class syntax_plugin_orphanmedia extends DokuWiki_Syntax_Plugin {
         $_all_links = array();
         $pageCounter = 0;
         $linkCounter = 1;
+        define('LINK_PATTERN', "/\{\{(?!.*\x3E).*\}\}/");
+        define('LINK_PATTERNtwo', "/<flashplayer.*>file=(?<link>.*)\x26.*<\/flashplayer>|<flashplayer.*>file=(?<all>.*)<\/flashplayer>/");
+        define('LINK_PATTERNthree', "/\[\[(?<link>\\\\.*)\|.*\]\]|\[\[(?<all>\\\\.*)\]\]/");
+        define('LINK_PATTERNfour', "/'\{\{gallery>[^}]*\}\}'/");        
+        
         foreach($listPageFiles as $page_filepath) {
             $_all_links[$pageCounter][0] = $page_filepath;
             // read the content of the page file to be analyzed for media links
             $body = file_get_contents($page_filepath);
-            
+            // -----------------------------------
             // find all page-> media links defined by Link pattern into $links
              $links = array(); 
-             define('LINK_PATTERN', "/\{\{(?!.*\x3E).*\}\}/");
              if( preg_match(LINK_PATTERN, $body) ) {
                  preg_match_all(LINK_PATTERN, $body, $links);
                  $links = $this->array_flat($links);
              }
-            // exception for flashplayer plugin where file reference is not inside curly brackets
-            // <flashplayer width=610 height=480>file=/doku/_media/foo/bar.flv&autostart=true</flashplayer>
+            // -----------------------------------
+            // Exception for flashplayer plugin where file reference is not inside curly brackets
+            // RegEx -> SubPattern and Alternate used as follows
+            // /<flashplayer.*>file=(?<link>.*)\x26.*<\/flashplayer>|<flashplayer.*>file=(?<all>.*)<\/flashplayer>/
+            // check online at http://www.solmetra.com/scripts/regex/index.php
+            // -----------------------------------
+            // Case 0: link with appended options -> initial pattern applies
+            // Case 1: link without options -> alternate pattern applies
+            // -----------------------------------
+            // results in:
+            /* Array
+              (   [0] => Array
+                      ( [0] => <flashplayer width=610 height=480>file=/doku/_media/foo/bar.flv&autostart=true</flashplayer>
+                        [1] => <flashplayer width=610 height=480>file=/doku/_media/foo/bar.flv</flashplayer> )
+                  [link] => Array
+                      ( [0] => /doku/_media/foo/bar.flv
+                        [1] => )
+                  [1] => Array
+                      ( [0] => /doku/_media/foo/bar.flv
+                        [1] => )
+                  [all] => Array
+                      ( [0] => 
+                        [1] => /doku/_media/foo/bar.flv )
+                  [2] => Array
+                      ( [0] => 
+                        [1] => /doku/_media/foo/bar.flv )
+              ) */
             $flashpl_links = array();
-            define('LINK_PATTERNtwo', "/<flashplayer(?!.>).*<\/flashplayer>/");
+            $a_links = array();
             if( preg_match(LINK_PATTERNtwo, $body) ) {
                 preg_match_all(LINK_PATTERNtwo, $body, $flashpl_links);
-                $flashpl_links = $this->array_flat($flashpl_links);
+                //finally loop through link and all and pick-up all non-empty fields
+                foreach($flashpl_links['link'] as $flashpl_link) {
+                    if(strlen($flashpl_link)>3) $a_links[] = $flashpl_link;
+                }
+                foreach($flashpl_links['all'] as $flashpl_link) {
+                    if(strlen($flashpl_link)>3) $a_links[] = $flashpl_link;
+                }
+                unset($flashpl_links);
+                $flashpl_links = $a_links;
+                
             }
-
+            // -----------------------------------
+            // Exception for Windows Shares like [[\\server\share|this]] are recognized, too.
+            // RegEx -> SubPattern and Alternate used as follows
+            // /\[\[(?<link>\\\\.*)\x7c.*\]\]|\[\[(?<all>\\\\.*)\]\]/
+            // check online at http://www.solmetra.com/scripts/regex/index.php
+            // -----------------------------------
+            // Case 0: link with appended options -> initial pattern applies
+            // Case 1: link without options -> alternate pattern applies
+            // -----------------------------------
+            // results in:
+            /*Array
+              ( [0] => Array
+                      ( [0] => [[\\server\share|this]]
+                        [1] => [[\\server\share]] )
+                [link] => Array
+                      ( [0] => server\share
+                        [1] => )
+                [1] => Array
+                      ( [0] => server\share
+                        [1] => )
+                [all] => Array
+                      ( [0] => 
+                        [1] => server\share )
+                [2] => Array
+                      ( [0] => 
+                        [1] => server\share )
+              ) */
+             $fileshares = array();
+             $b_links = array(); 
+             if( preg_match(LINK_PATTERNthree, $body) ) {
+                 preg_match_all(LINK_PATTERNthree, $body, $fileshares);
+                //finally loop through link and all and pick-up all non-empty fields
+                foreach($fileshares['link'] as $flshare_link) {
+                    if(strlen($flshare_link)>3) $b_links[] = $flshare_link;
+                }
+                foreach($fileshares['all'] as $flshare_link) {
+                    if(strlen($flshare_link)>3) $b_links[] = $flshare_link;
+                }
+                unset($fileshares);
+                $fileshares = $b_links;
+             }
+            // -----------------------------------
             // loop through page-> media link array and prepare links
             foreach($links as $media_link) {
                 // exclude http, tag and topic links
@@ -397,29 +476,51 @@ class syntax_plugin_orphanmedia extends DokuWiki_Syntax_Plugin {
                 $linkCounter++;
              }
              
-             // loop through page-> flashplayer link array and prepare links         
-             foreach($flashpl_links as $flashpl_link) {
-                if(strlen($flashpl_link)<3) continue;
-              // ---------------------------------------------------------------
-                $flashpl_link = $this->clean_flash($flashpl_link);
-              // ---------------------------------------------------------------  
-                // filter according $defFileTypes
-                if($defFileTypes !==""){
-                    $parts = explode(".", $flashpl_link);
-                    if (is_array($parts) && count($parts) > 1) {
-                       $extension = end($parts);
-                       $extension = ltrim($extension, ".");
+             // loop through page-> flashplayer link array and prepare links
+             if(count($flashpl_links)>0) {
+                 foreach($flashpl_links as $flashpl_link) {
+                    if(strlen($flashpl_link)<3) continue;
+                    // filter according $defFileTypes
+                    if($defFileTypes !==""){
+                        $parts = explode(".", $flashpl_link);
+                        if (is_array($parts) && count($parts) > 1) {
+                           $extension = end($parts);
+                           $extension = ltrim($extension, ".");
+                        }
+                      if(stristr($defFileTypes, $extension)===false) continue;
                     }
-                  if(stristr($defFileTypes, $extension)===false) continue;
-                }
-
-                // exclude external flashplayer links
-                if((strlen($flashpl_link)>1) && strpos($flashpl_link, "://")<1) {
-                     // collect all flashplayer links of the current page
-                     $_all_links[$pageCounter][$linkCounter] = strtolower($flashpl_link);
-                     $linkCounter++;
-                }
+                    
+                    // exclude external flashplayer links
+                    if((strlen($flashpl_link)>1) && strpos($flashpl_link, "://")<1) {
+                         // collect all flashplayer links of the current page
+                         $_all_links[$pageCounter][$linkCounter] = strtolower($flashpl_link);
+                         $linkCounter++;
+                    }
+                 }
              }
+             // loop through page-> fileshare link array and prepare links
+             if(count($fileshares)>0) {         
+                 foreach($fileshares as $fileshare_link) {
+                    if(strlen($fileshare_link)<3) continue;
+                    // filter according $defFileTypes
+                    if($defFileTypes !==""){
+                        $parts = explode(".", $fileshare_link);
+                        if (is_array($parts) && count($parts) > 1) {
+                           $extension = end($parts);
+                           $extension = ltrim($extension, ".");
+                        }
+                      if(stristr($defFileTypes, $extension)===false) continue;
+                    }
+    
+                    // exclude external flashplayer links
+                    if((strlen($fileshare_link)>1) && strpos($fileshare_link, "://")<1) {
+                         // collect all flashplayer links of the current page
+                         $_all_links[$pageCounter][$linkCounter] = strtolower($fileshare_link);
+                         $linkCounter++;
+                    }
+                 }
+             }
+
             // do merge media and flashplayer arrays
             // $page_filepath string does already contain all local media and flashplayer links separated by "|"
             //$page_filepath = preg_replace(":","/",$page_filepath);
@@ -455,17 +556,6 @@ class syntax_plugin_orphanmedia extends DokuWiki_Syntax_Plugin {
          if (strpos($xBody, '}}') > 0) { $xBody = substr($xBody,0, strpos($xBody, '}}')); }
          return $xBody; 
     }
-//---------------------------------------------------------------------------------------
-    function clean_flash($xBody)
-    { // <flashplayer width=610 height=480>file=/doku/_media/foo/bar.flv&autostart=true</flashplayer>
-         //cut evrerything after ampersand (incl. ampersand)
-         if (strpos($xBody, '&') > 0) { $xBody = substr($xBody,0, strpos($xBody, '&')); }
-      // cut the leading 'file='
-         if (strpos($xBody, 'file') > 0) { $trimmed  = substr($xBody,strpos($xBody, 'file='),strlen($xBody)-strpos($xBody, 'file=')); }
-         if (strpos($trimmed, '=') > 0) { $trimmed2 = substr($trimmed,strpos($trimmed, '=')+1,strlen($trimmed)-strpos($trimmed, '=')); }
-//         echo $trimmed2.' , '.strpos($trimmed2, '/').'<br />';
-         return $trimmed2; 
-    }    
 // ---------------------------------------------------------------
     function _prepare_output($m_link,$page,$img,$counter)
     {
@@ -494,7 +584,5 @@ class syntax_plugin_orphanmedia extends DokuWiki_Syntax_Plugin {
         return $output;
     }
 // --------------------------------------------------------------- 
-
 }
-//Setup VIM: ex: et ts=4 enc=utf-8 :
 ?>

@@ -347,7 +347,7 @@ class syntax_plugin_orphanmedia extends DokuWiki_Syntax_Plugin {
         $_all_links = array();
         $pageCounter = 0;
         $linkCounter = 1;
-        define('LINK_PATTERN', "/\{\{(?!.*\x3E).*\}\}/");
+        define('LINK_PATTERN', "/\{\{(?!.*\x3E).*?\}\}/i");
         define('LINK_PATTERNtwo', "/<flashplayer.*>file=(?<link>.*)\x26.*<\/flashplayer>|<flashplayer.*>file=(?<all>.*)<\/flashplayer>/");
         define('LINK_PATTERNthree', "/\[\[(?<link>\\\\.*)\|.*\]\]|\[\[(?<all>\\\\.*)\]\]/");
         define('LINK_PATTERNfour', "/'\{\{gallery>[^}]*\}\}'/");        

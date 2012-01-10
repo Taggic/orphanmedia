@@ -1,7 +1,7 @@
 base orphanmedia
 author Taggic
 email Taggic@t-online.de
-date 2011-12-18
+date 2012-01-10
 name OrphanMedia Plugin
 desc Display orphan and missing media files.
 'url'    => 'http://dokuwiki.org/plugin:orphanmedia',

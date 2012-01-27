@@ -105,7 +105,10 @@ class syntax_plugin_orphanmedia extends DokuWiki_Syntax_Plugin {
               // 1. direct matches where pages->media links are identical to media file path
               foreach($listPageFile_MediaLinks as &$perPage_MediaLinks) {
                   for($i = 1; $i < count($perPage_MediaLinks); $i++) {
-                      $perPage_MediaLinks[$i] = str_replace(":","/",$perPage_MediaLinks[$i]);
+                      // prevent destroying unc path
+                      if((stripos($perPage_MediaLinks[$i],":\\")===false) && stripos($perPage_MediaLinks[$i],"://")===false) {
+                          $perPage_MediaLinks[$i] = str_replace(":","/",$perPage_MediaLinks[$i]);
+                      }
                       // strip initial slash if exist
                       if(strpos($perPage_MediaLinks[$i],"/") === 0)  $perPage_MediaLinks[$i] = ltrim($perPage_MediaLinks[$i],"/");
                       
@@ -131,6 +134,20 @@ class syntax_plugin_orphanmedia extends DokuWiki_Syntax_Plugin {
                           }
                       }
                       
+                      // case 3: it is an external linked media by http or https
+                      if((strpos($perPage_MediaLinks[$i],'http:')!==false) || (strpos($perPage_MediaLinks[$i],'https:')!==false)) { 
+                          if((strpos($perPage_MediaLinks[$i],"|valid")===false) && (strpos($perPage_MediaLinks[$i],"|relative")===false)) {
+                              $t_flag = $this->url_exist($perPage_MediaLinks[$i]);
+
+                              if($t_flag !== false) {
+                                  $perPage_MediaLinks[$i] .= "|relative";
+                                  $listMediaFiles[1][$position] = "found";
+//                                  msg($perPage_MediaLinks[$i],1);
+                                  continue;
+                              }
+//                              else msg($perPage_MediaLinks[$i],-1); 
+                          }
+                      }
                   }
               }
               $position++;
@@ -347,16 +364,22 @@ class syntax_plugin_orphanmedia extends DokuWiki_Syntax_Plugin {
         $_all_links = array();
         $pageCounter = 0;
         $linkCounter = 1;
-        define('LINK_PATTERN', "/\{\{(?!.*\x3E).*?\}\}/i");
+        define('LINK_PATTERN', "/\{\{.*?\}\}/i");
         define('LINK_PATTERNtwo', "/<flashplayer.*>file=(?<link>.*)\x26.*<\/flashplayer>|<flashplayer.*>file=(?<all>.*)<\/flashplayer>/");
         define('LINK_PATTERNthree', "/\[\[(?<link>\\\\.*)\|.*\]\]|\[\[(?<all>\\\\.*)\]\]/");
-        define('LINK_PATTERNfour', "/'\{\{gallery>[^}]*\}\}'/");        
+        define('LINK_PATTERNfour', "/'\{\{gallery>[^}]*?\}\}'/");        
+        
+        // get all defined tags where media links inbetween are to be ignored
+        $ignore_tags = array();
+        $ignore_tags = $this->getConf('ignore_tags');
         
         foreach($listPageFiles as $page_filepath) {
             $_all_links[$pageCounter][0] = $page_filepath;
             // read the content of the page file to be analyzed for media links
             $body = file_get_contents($page_filepath);
             // -----------------------------------
+            // ignore content between defined tags e.g. '<code> ... </code>'
+            $body = preg_replace($ignore_tags,' ',$body);
             // find all page-> media links defined by Link pattern into $links
              $links = array(); 
              if( preg_match(LINK_PATTERN, $body) ) {
@@ -445,19 +468,20 @@ class syntax_plugin_orphanmedia extends DokuWiki_Syntax_Plugin {
                 }
                 unset($fileshares);
                 $fileshares = $b_links;
-             }
+             }                                                            
             // -----------------------------------
             // loop through page-> media link array and prepare links
             foreach($links as $media_link) {
                 // exclude http, tag and topic links
                 if(strlen($media_link)<3) continue;
-                if(stristr($media_link, "http:")!==false) continue;
+                //if(stristr($media_link, "http:")!==false) continue;
                 if(stristr($media_link, "tag>")!==false) continue;
                 if(stristr($media_link, "blog>")!==false) continue;
                 if(stristr($media_link, "topic>")!==false) continue;
                 if(stristr($media_link, "wikistatistics>")!==false) continue;
             // ---------------------------------------------------------------
                 $media_link = $this->clean_link($media_link);
+                if(!$media_link) continue;    // ignore empty fields
             // ---------------------------------------------------------------  
 
                 // filter according $defFileTypes
@@ -468,8 +492,7 @@ class syntax_plugin_orphanmedia extends DokuWiki_Syntax_Plugin {
                        $extension = ltrim($extension, ".");
                     }
                   if(stristr($defFileTypes, $extension)===false) continue;
-                }
-                
+                } 
                 // collect all media links of the current page
                 //$page_filepath .= "|" . strtolower($media_link);
                 $_all_links[$pageCounter][$linkCounter] = strtolower($media_link);
@@ -511,7 +534,6 @@ class syntax_plugin_orphanmedia extends DokuWiki_Syntax_Plugin {
                         }
                       if(stristr($defFileTypes, $extension)===false) continue;
                     }
-    
                     // exclude external flashplayer links
                     if((strlen($fileshare_link)>1) && strpos($fileshare_link, "://")<1) {
                          // collect all flashplayer links of the current page
@@ -544,37 +566,62 @@ class syntax_plugin_orphanmedia extends DokuWiki_Syntax_Plugin {
     }
 //---------------------------------------------------------------------------------------
     function clean_link($xBody)
-    {
-      // cut the two leading '{{'
-         $xBody=ltrim($xBody, '{');
-         //cut questionmark and further characters if exist
-         if (strpos($xBody, '?') > 0) { $xBody = substr($xBody,0, strpos($xBody, '?')); }
-         // sometimes a blank remains at the end to be cut
-         $xBody = str_replace(" ", '' ,$xBody);
-         //cut pipe and further characters if pipe exist
-         if (strpos($xBody, '|') > 0) { $xBody = substr($xBody,0, strpos($xBody, '|')); }
-         if (strpos($xBody, '}}') > 0) { $xBody = substr($xBody,0, strpos($xBody, '}}')); }
-         return $xBody; 
+    { 
+      // evaluate the media link by DW embedded function
+       $link = Doku_Handler_Parse_Media($xBody);
+       if (stripos($link['src'],'>') === false) $xBody = $link['src'];
+       else $xBody = '';
+      // $link = array('type', 'src', 'title', 'align', 'width', 'height', 'cache', 'linking')
+/*       if(($link['type']=='internalmedia') && (stripos($link['src'],'>')=== false)) {
+            $xBody = $link['src'];
+       }
+       elseif(($link['type']=='externalmedia') && (stripos($link['src'],'>')=== false)) {
+          $t_flag = $this->url_exist($link['src']);
+//          if($t_flag===false)  msg('URL does NOT exist: <a href="'.$link['src'].'" title="'.$link['src'].'"  rel="nofollow">'.$link['src'].'</a>',-1);
+//          else msg('URL does exist: <a href="'.$link['src'].'" title="'.$link['src'].'"  rel="nofollow">'.$link['src'].'</a>',1); 
+          if($t_flag===true) $xBody = $link['src'];
+          if(stristr($link['src'], "http:")!==false) echo $xBody.'<br />';          
+          if($t_flag===true) msg('URL does exist: <a href="'.$link['src'].'" title="'.$link['src'].'"  rel="nofollow">'.$link['src'].'</a>',1);
+       }
+       else {
+//          msg('URL does NOT exist: <a href="'.$link['src'].'" title="'.$link['src'].'"  rel="nofollow">'.$link['src'].'</a>',-1);
+          $xBody = '';
+       }    */
+       return $xBody; 
     }
 // ---------------------------------------------------------------
     function _prepare_output($m_link,$page,$img,$counter)
     {
             // all media files checked with current media link from current page
-                    //extract page file name
-                    $p_filename = basename($page);
+            //extract page file name
+            $p_filename = basename($page);
+            //cut everything before pages/ from link
+            $y_pos=strpos($page, "pages");
+            $t1 = substr($page, $y_pos);
+            $t1 = substr(str_replace( ".txt" , "" , $t1 ) , 5, 9999);
                     
-                    //cut everything before pages/ from link
-                    $y_pos=strpos($page, "pages");
-                    $t1 = substr($page, $y_pos);
-              
+            // check for linke type and handle accordingly
+            // fileshares or UNC links
+            if (( preg_match('/^\\\\\\\\[^\\\\]+?\\\\/u',$m_link) ) || (substr($m_link, 0, 1) == '\\')) {
+                  // 'windowslink'  or shares
+                  // do not modify the link
+                  $t2 = '<a class=wikilink1 href="'.$t1;
+//                  echo $t1.' unc: -> '.$m_link.'<br />';
+            }
+            elseif ( preg_match('#^([a-z0-9\-\.+]+?)://#i',$m_link) ) {
+                  // external link (accepts all protocols)
+                  $t2 = '<a class=wikilink1 href="'.$t1;
+//                  echo $t1.' ext: -> '.$m_link.'<br />';
+            }
+            // turn it into wiki link without "pages"
+            /*  $t1= html_wikilink($t1,$t1);  */
+            else {
+                $t2 = str_replace("/", ":", $t1);
+                $t2 = '<a class=wikilink1 href="'. DOKU_URL . "doku.php?id=" . substr($t2, 1, strlen($t2));
+            }
+
+            $t1 =  $t2 . '" title="' . $t1 . '" rel="nofollow">' . $t1 . '</a>';                   
                     
-                    $t1 = substr(str_replace( ".txt" , "" , $t1 ) , 5, 9999);
-                    // turn it into wiki link without "pages"
-                    /*  $t1= html_wikilink($t1,$t1);  */
-                    $t2 = str_replace("/", ":", $t1);
-                    $t2 = substr($t2, 1, strlen($t2));
-                     
-                    $t1 = '<a class=wikilink1 href="'. DOKU_URL . "doku.php?id=" . $t2 . '" title="' . $t1 . '" rel="nofollow">' . $t1 . '</a>';                   
                 
             $output.= '<tr>'.NL.
                       '   <td class="col0 centeralign"><img src="'.DOKU_URL.'\/lib\/plugins\/orphanmedia\/images\/'.$img.'" align="middle" /></td>'.NL.
@@ -584,5 +631,23 @@ class syntax_plugin_orphanmedia extends DokuWiki_Syntax_Plugin {
         return $output;
     }
 // --------------------------------------------------------------- 
+    function url_exist($url){
+        $fb_url = $url;
+        $url = @parse_url($url);  
+        if (!$url) return false;    
+        $url = array_map('trim', $url);  
+        $url['port'] = (!isset($url['port'])) ? 80 : (int)$url['port'];  
+        $path = (isset($url['path'])) ? $url['path'] : '';  
+        if ($path == '')   $path = '/';    
+        $path .= (isset($url['query'])) ?  "?$url[query] " : '';  
+        if (isset($url['host']) AND $url['host'] != gethostbyname($url['host']))  
+        {  
+           $headers = @get_headers( "$url[scheme]://$url[host]:$url[port]$path ");  
+           $headers = (is_array($headers)) ? implode( "n ", $headers) : $headers;    
+//           return (bool)preg_match('#^HTTP/.*s+[(200|301|302)]+s#i', $headers);
+           return true;   
+        }  
+        return false;  
+    }  
 }
 ?>

@@ -371,7 +371,8 @@ class syntax_plugin_orphanmedia extends DokuWiki_Syntax_Plugin {
         
         // get all defined tags where media links inbetween are to be ignored
         $ignore_tags = array();
-        $ignore_tags = $this->getConf('ignore_tags');
+        $ignore_tags = parse_ini_file(DOKU_PLUGIN."orphanmedia/config.ini");
+//        echo var_dump($ignore_tags);
         
         foreach($listPageFiles as $page_filepath) {
             $_all_links[$pageCounter][0] = $page_filepath;
@@ -566,27 +567,10 @@ class syntax_plugin_orphanmedia extends DokuWiki_Syntax_Plugin {
     }
 //---------------------------------------------------------------------------------------
     function clean_link($xBody)
-    { 
-      // evaluate the media link by DW embedded function
+    { // evaluate the media link by DW embedded function
        $link = Doku_Handler_Parse_Media($xBody);
        if (stripos($link['src'],'>') === false) $xBody = $link['src'];
        else $xBody = '';
-      // $link = array('type', 'src', 'title', 'align', 'width', 'height', 'cache', 'linking')
-/*       if(($link['type']=='internalmedia') && (stripos($link['src'],'>')=== false)) {
-            $xBody = $link['src'];
-       }
-       elseif(($link['type']=='externalmedia') && (stripos($link['src'],'>')=== false)) {
-          $t_flag = $this->url_exist($link['src']);
-//          if($t_flag===false)  msg('URL does NOT exist: <a href="'.$link['src'].'" title="'.$link['src'].'"  rel="nofollow">'.$link['src'].'</a>',-1);
-//          else msg('URL does exist: <a href="'.$link['src'].'" title="'.$link['src'].'"  rel="nofollow">'.$link['src'].'</a>',1); 
-          if($t_flag===true) $xBody = $link['src'];
-          if(stristr($link['src'], "http:")!==false) echo $xBody.'<br />';          
-          if($t_flag===true) msg('URL does exist: <a href="'.$link['src'].'" title="'.$link['src'].'"  rel="nofollow">'.$link['src'].'</a>',1);
-       }
-       else {
-//          msg('URL does NOT exist: <a href="'.$link['src'].'" title="'.$link['src'].'"  rel="nofollow">'.$link['src'].'</a>',-1);
-          $xBody = '';
-       }    */
        return $xBody; 
     }
 // ---------------------------------------------------------------
@@ -602,7 +586,7 @@ class syntax_plugin_orphanmedia extends DokuWiki_Syntax_Plugin {
                     
             // check for linke type and handle accordingly
             // fileshares or UNC links
-            if (( preg_match('/^\\\\\\\\[^\\\\]+?\\\\/u',$m_link) ) || (substr($m_link, 0, 1) == '\\')) {
+/*            if (( preg_match('/^\\\\\\\\[^\\\\]+?\\\\/u',$m_link) ) || (substr($m_link, 0, 1) == '\\')) {
                   // 'windowslink'  or shares
                   // do not modify the link
                   $t2 = '<a class=wikilink1 href="'.$t1;
@@ -615,9 +599,10 @@ class syntax_plugin_orphanmedia extends DokuWiki_Syntax_Plugin {
             }
             // turn it into wiki link without "pages"
             /*  $t1= html_wikilink($t1,$t1);  */
-            else {
+//            else {
                 $t2 = str_replace("/", ":", $t1);
-            }
+//            }
+
             $t2 = '<a class=wikilink1 href="'. DOKU_URL . "doku.php?id=" . substr($t2, 1, strlen($t2));
             $t1 =  $t2 . '" title="' . $t1 . '" rel="nofollow">' . $t1 . '</a>';                   
                     

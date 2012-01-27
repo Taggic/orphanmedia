@@ -610,16 +610,15 @@ class syntax_plugin_orphanmedia extends DokuWiki_Syntax_Plugin {
             }
             elseif ( preg_match('#^([a-z0-9\-\.+]+?)://#i',$m_link) ) {
                   // external link (accepts all protocols)
-                  $t2 = '<a class=wikilink1 href="'.$t1;
+                  $t2 = $t1;
 //                  echo $t1.' ext: -> '.$m_link.'<br />';
             }
             // turn it into wiki link without "pages"
             /*  $t1= html_wikilink($t1,$t1);  */
             else {
                 $t2 = str_replace("/", ":", $t1);
-                $t2 = '<a class=wikilink1 href="'. DOKU_URL . "doku.php?id=" . substr($t2, 1, strlen($t2));
             }
-
+            $t2 = '<a class=wikilink1 href="'. DOKU_URL . "doku.php?id=" . substr($t2, 1, strlen($t2));
             $t1 =  $t2 . '" title="' . $t1 . '" rel="nofollow">' . $t1 . '</a>';                   
                     
                 

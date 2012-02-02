@@ -9,6 +9,7 @@
 if(!defined('DOKU_INC')) define('DOKU_INC',realpath(dirname(__FILE__).'/../../').'/');
 if(!defined('DOKU_PLUGIN')) define('DOKU_PLUGIN',DOKU_INC.'lib/plugins/');
 require_once(DOKU_INC.'inc/search.php');
+include(DOKU_INC.'inc/JpegMeta.php');
 /******************************************************************************
  * All DokuWiki plugins to extend the parser/rendering mechanism
  * need to inherit from this class
@@ -183,8 +184,8 @@ class syntax_plugin_orphanmedia extends DokuWiki_Syntax_Plugin {
                               '<table class="inline">'.
                               '<tr><th  class="orph_col0 centeralign">i</th>
                                    <th  class="orph_col1 centeralign">#</th>
-                                   <th  class="orph_col2 centeralign"> Page files </th>
-                                   <th  class="orph_col3 centeralign"> orphan Media </th></tr>';
+                                   <th  class="orph_col2 centeralign"> Media files </th>
+                                   <th  class="orph_col3 centeralign"> Preview orphan Media </th></tr>';
                               
             foreach($listPageFile_MediaLinks as $perPage_MediaLinks) {
                 for($i = 1; $i < count($perPage_MediaLinks); $i++) {
@@ -200,6 +201,7 @@ class syntax_plugin_orphanmedia extends DokuWiki_Syntax_Plugin {
                     if((strpos($perPage_MediaLinks[$i],"|valid")===false) && (strpos($perPage_MediaLinks[$i],"|relative")===false)) {
                         $missing_counter++;
                         $output_missing .= $this->_prepare_output($perPage_MediaLinks[$i],$perPage_MediaLinks[0],$nok_img,$missing_counter);
+                        
                     }
                 }
             }
@@ -211,10 +213,49 @@ class syntax_plugin_orphanmedia extends DokuWiki_Syntax_Plugin {
                   if(!$conf['useslash']) $rt2 = str_replace("/", ":", $listMediaFiles[0][$position]);
                   else $rt2 = $listMediaFiles[0][$position];
                   
-                  $picturepreview = '<a href="' . DOKU_URL . 'lib/exe/detail.php?media=' . $rt2  
-                              . '" class="media" title="'. $listMediaFiles[0][$position]  
-                              . '"><img src="'. DOKU_URL . 'lib/exe/fetch.php?media=' . $rt2 
-                              . '&w=100" class="media" alt="' . $listMediaFiles[0][$position] . '" /></a>';
+                  $m_link = $conf['mediadir'].'/'.$listMediaFiles[0][$position];
+                  $style = '';
+                  $w_max = 200;
+                  $h_max = 75;
+                  if (preg_match("/\.(jpe?g|gif|png)$/", $m_link) && file_exists($m_link)) {
+                       $minfo = getimagesize($m_link);
+                       $w = (int) $minfo[0];
+                       $h = (int) $minfo[1];
+
+                       if($w > $w_max || $h > $h_max) {
+                           if($h > $h_max) {
+                              $ratio = $h_max / $h;
+                              $h = $h_max;
+                              $w = floor($w * $ratio);
+                           }
+                           else {
+                              $ratio = $w_max / $w;
+                              $w = $w_max;
+                              $h = floor($h * $ratio);
+                           }
+                       }
+                       $style = ' style="width: '.$w.'px; height: '.$h.'px;"';
+                       $picturepreview = '<a href="' . DOKU_URL . 'lib/exe/detail.php?media=' . $rt2  
+                                    . '" class="media" title="'. $listMediaFiles[0][$position]  
+                                    . '"><img src="'. DOKU_URL . 'lib/exe/fetch.php?media=' . $rt2 
+                                    . '" class="media" ' .$style. 'alt="' . $listMediaFiles[0][$position] .'" /></a>';
+                  }
+                  else {
+                      list($ext,$mime,$dl) = mimetype(mediaFN($m_link),false);
+                  
+                      if (@file_exists(DOKU_INC.'lib/images/fileicons/'.$ext.'.png')) {
+                          $icon = DOKU_BASE.'lib/images/fileicons/'.$ext.'.png';
+                      } else {
+                          $icon = DOKU_BASE.'lib/images/fileicons/file.png';
+                      }
+                      $icon = '<img src="'.$icon.'" alt="'.$m_link.'" class="icon" />';
+                      $picturepreview = '<a href="' . $m_link   
+                                   . '" class="wikilink" title="'. $m_link  
+                                   . '">'.$icon.'&nbsp;'.$rt2.'</a>';
+                  }
+        
+
+                  
                   
                   $output_orphan .= '<tr>'.NL.
                               '<td>'.NL.
@@ -576,8 +617,9 @@ class syntax_plugin_orphanmedia extends DokuWiki_Syntax_Plugin {
        return $xBody; 
     }
 // ---------------------------------------------------------------
-    function _prepare_output($m_link,$page,$img,$counter)
+    function _prepare_output($m_link,$page,$img,$counter,$class=NULL)
     {
+            global $conf;
             // all media files checked with current media link from current page
             //extract page file name
             $p_filename = basename($page);
@@ -585,25 +627,9 @@ class syntax_plugin_orphanmedia extends DokuWiki_Syntax_Plugin {
             $y_pos=strpos($page, "pages");
             $t1 = substr($page, $y_pos);
             $t1 = substr(str_replace( ".txt" , "" , $t1 ) , 5, 9999);
-                    
-            // check for linke type and handle accordingly
-            // fileshares or UNC links
-/*            if (( preg_match('/^\\\\\\\\[^\\\\]+?\\\\/u',$m_link) ) || (substr($m_link, 0, 1) == '\\')) {
-                  // 'windowslink'  or shares
-                  // do not modify the link
-                  $t2 = '<a class=wikilink1 href="'.$t1;
-//                  echo $t1.' unc: -> '.$m_link.'<br />';
-            }
-            elseif ( preg_match('#^([a-z0-9\-\.+]+?)://#i',$m_link) ) {
-                  // external link (accepts all protocols)
-                  $t2 = $t1;
-//                  echo $t1.' ext: -> '.$m_link.'<br />';
-            }
-            // turn it into wiki link without "pages"
-            /*  $t1= html_wikilink($t1,$t1);  */
-//            else {
-                $t2 = str_replace("/", ":", $t1);
-//            }
+
+            if(!$conf['useslash']) $t2 = str_replace("/", ":", $t1);
+            else $t2 = $t1;
 
             $t2 = '<a class=wikilink1 href="'. DOKU_URL . "doku.php?id=" . substr($t2, 1, strlen($t2));
             $t1 =  $t2 . '" title="' . $t1 . '" rel="nofollow">' . $t1 . '</a>';                   
@@ -634,6 +660,21 @@ class syntax_plugin_orphanmedia extends DokuWiki_Syntax_Plugin {
            return true;   
         }  
         return false;  
-    }  
+    } 
+// --------------------------------------------------------------- 
+      function getResizeRatio($maxwidth,$maxheight=0){
+          if(!$maxheight) $maxheight = $maxwidth;
+          $ratio = 1;
+          if($w >= $h) {
+              if($w >= $maxwidth){ $ratio = $maxwidth/$w; }
+              elseif($h > $maxheight) { $ratio = $maxheight/$h; }
+          }
+          else {
+              if($h >= $maxheight) { $ratio = $maxheight/$h; }
+              elseif($w > $maxwidth) { $ratio = $maxwidth/$w; }
+          }
+          return $ratio;
+      }
+// ---------------------------------------------------------------   
 }
 ?>

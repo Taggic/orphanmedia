@@ -8,8 +8,6 @@
 /******************************************************************************/ 
 if(!defined('DOKU_INC')) define('DOKU_INC',realpath(dirname(__FILE__).'/../../').'/');
 if(!defined('DOKU_PLUGIN')) define('DOKU_PLUGIN',DOKU_INC.'lib/plugins/');
-if(!defined('DOKU_PAGES')) define('DOKU_PAGES',DOKU_INC.'data/pages/');
-if(!defined('DOKU_MEDIA')) define('DOKU_MEDIA',DOKU_INC.'data/media/');
 require_once(DOKU_INC.'inc/search.php');
 /******************************************************************************
  * All DokuWiki plugins to extend the parser/rendering mechanism
@@ -91,8 +89,11 @@ class syntax_plugin_orphanmedia extends DokuWiki_Syntax_Plugin {
 //            echo sprintf("<p>%s</p>\n", var_dump($listPageFile_MediaLinks));
             
             // analyse matches of media files and pages->media links
-            $doku_media = str_replace("\\","/",DOKU_MEDIA);
-            $doku_pages = str_replace("\\","/",DOKU_PAGES);
+            // what if savedir option is used ? => $conf['mediadir']
+            $doku_media = $conf['mediadir'].'/';           
+            $doku_pages = $conf['datadir'].'/';
+            //$doku_media = str_replace("\\","/",DOKU_MEDIA);
+            //$doku_pages = str_replace("\\","/",DOKU_PAGES);
             
             $listMediaFiles = array($listMediaFiles,array_pad(array(),count($listMediaFiles),'0'));
             $position = 0;
@@ -207,7 +208,9 @@ class syntax_plugin_orphanmedia extends DokuWiki_Syntax_Plugin {
             foreach($listMediaFiles[1] as $check) {
                 if($check === '0') {
                   $orphan_counter++;
-                  $rt2 = str_replace("/", ":", $listMediaFiles[0][$position]);
+                  if(!$conf['useslash']) $rt2 = str_replace("/", ":", $listMediaFiles[0][$position]);
+                  else $rt2 = $listMediaFiles[0][$position];
+                  
                   $picturepreview = '<a href="' . DOKU_URL . 'lib/exe/detail.php?media=' . $rt2  
                               . '" class="media" title="'. $listMediaFiles[0][$position]  
                               . '"><img src="'. DOKU_URL . 'lib/exe/fetch.php?media=' . $rt2 
@@ -372,7 +375,6 @@ class syntax_plugin_orphanmedia extends DokuWiki_Syntax_Plugin {
         // get all defined tags where media links inbetween are to be ignored
         $ignore_tags = array();
         $ignore_tags = parse_ini_file(DOKU_PLUGIN."orphanmedia/config.ini");
-//        echo var_dump($ignore_tags);
         
         foreach($listPageFiles as $page_filepath) {
             $_all_links[$pageCounter][0] = $page_filepath;

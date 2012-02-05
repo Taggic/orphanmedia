@@ -9,7 +9,6 @@
 if(!defined('DOKU_INC')) define('DOKU_INC',realpath(dirname(__FILE__).'/../../').'/');
 if(!defined('DOKU_PLUGIN')) define('DOKU_PLUGIN',DOKU_INC.'lib/plugins/');
 require_once(DOKU_INC.'inc/search.php');
-include(DOKU_INC.'inc/JpegMeta.php');
 /******************************************************************************
  * All DokuWiki plugins to extend the parser/rendering mechanism
  * need to inherit from this class
@@ -217,7 +216,7 @@ class syntax_plugin_orphanmedia extends DokuWiki_Syntax_Plugin {
                   $style = '';
                   $w_max = 200;
                   $h_max = 75;
-                  if (preg_match("/\.(jpe?g|gif|png)$/", $m_link) && file_exists($m_link)) {
+                  if ((preg_match("/\.(jpe?g|gif|png)$/", $m_link) && file_exists($m_link)) && ($prviewcounter<$this->getConf('prev_limit'))) {
                        $minfo = getimagesize($m_link);
                        $w = (int) $minfo[0];
                        $h = (int) $minfo[1];
@@ -234,10 +233,11 @@ class syntax_plugin_orphanmedia extends DokuWiki_Syntax_Plugin {
                               $h = floor($h * $ratio);
                            }
                        }
-                       $style = ' style="width: '.$w.'px; height: '.$h.'px;"';
+                       $prviewcounter++;
+                       //$style = ' style="width: '.$w.'px; height: '.$h.'px;"';
                        $picturepreview = '<a href="' . DOKU_URL . 'lib/exe/detail.php?media=' . $rt2  
                                     . '" class="media" title="'. $listMediaFiles[0][$position]  
-                                    . '"><img src="'. DOKU_URL . 'lib/exe/fetch.php?media=' . $rt2 
+                                    . '"><img src="'. DOKU_URL . 'lib/exe/fetch.php?media=' . $rt2 .'&w='.$w.'&h='.$h
                                     . '" class="media" ' .$style. 'alt="' . $listMediaFiles[0][$position] .'" /></a>';
                   }
                   else {

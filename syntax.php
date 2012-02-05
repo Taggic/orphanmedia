@@ -205,7 +205,8 @@ class syntax_plugin_orphanmedia extends DokuWiki_Syntax_Plugin {
                 }
             }
             
-            $position = 0;            
+            $position = 0;
+            $prviewcounter = 0;            
             foreach($listMediaFiles[1] as $check) {
                 if($check === '0') {
                   $orphan_counter++;

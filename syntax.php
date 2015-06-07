@@ -9,6 +9,9 @@
 if(!defined('DOKU_INC')) define('DOKU_INC',realpath(dirname(__FILE__).'/../../').'/');
 if(!defined('DOKU_PLUGIN')) define('DOKU_PLUGIN',DOKU_INC.'lib/plugins/');
 require_once(DOKU_INC.'inc/search.php');
+
+define('DEBUG_MODE_ACTIVE',FALSE);         //to show some information if set to true 
+
 /******************************************************************************
  * All DokuWiki plugins to extend the parser/rendering mechanism
  * need to inherit from this class
@@ -29,20 +32,24 @@ class syntax_plugin_orphanmedia extends DokuWiki_Syntax_Plugin {
 /* Connect pattern to lexer
 */
     function connectTo($mode) {
-        $this->Lexer->addSpecialPattern('~~ORPHANMEDIA:[0-9a-zA-Z_:!]+~~',$mode,'plugin_orphanmedia');
+        $this->Lexer->addSpecialPattern('~~ORPHANMEDIA:[0-9a-zA-Z_:!;|]+~~',$mode,'plugin_orphanmedia');
     }
 /******************************************************************************/
 /* Handle the match
 */
-    function handle($match, $state, $pos, &$handler){
+    function handle($match, $state, $pos, &$handler){       
         $match_array = array();
+        $o_syntax = $match;
         //strip ~~ORPHANMEDIA: from start and ~~ from end
         $match = substr($match,14,-2);
         // split parameters 
-        $match_array = explode("!", $match);
-        // $match_array[0] will be summary, missing, orphan or syntax error
-        // once, if there are excluded namespaces, they will be in $match_array[1] .. [x]
-        // this return value appears in render() as the $data param there
+        $match_array = explode("!", $match);      
+        // $match_array[0] mandatory; can be summary, missing or orphan followed by the optional perf term
+        //                 separated by colon media type/extension filter settings can be added (positive match)        
+        // $match_array[1] positive match, contains a single namespace to be ignored; delimiter mandatory if Parameter 2, else optional        
+        // $match_array[2] positive match, contains use cases not to be executed (relative, external); optional
+        // $match_array[99] contains the syntax of the page and will be displayed within performance measurement
+        $match_array[99] = $o_syntax;
         return $match_array;
     }
 
@@ -50,9 +57,18 @@ class syntax_plugin_orphanmedia extends DokuWiki_Syntax_Plugin {
 /* Create output 
 */
     function render($format, &$renderer, $data) {
-
         if($format !== 'xhtml'){ return false; }  // cancel if not xhtml
             global $INFO, $conf;
+            
+            if((DEBUG_MODE_ACTIVE != false) || (stripos($data[0],"perf") !== false)) { $this->get_execution_time(); }
+            
+            // skip ns
+            if (strlen($data[1])>0) { 
+                $data[1] = str_replace(':','/',$data[1]); 
+                // strip ending slash if exist
+                $data[1] = rtrim($data[1], '/');
+            //    echo $data[1].': Länge = '.strlen($data[1])." -> Letzte Position = ".strrpos($data[1],'/').'<br>';
+            }
             
             // Media Filter by Extension ---------------------------------------
             $defFileTypes = explode(':',$data[0]); // split use case entry and file extensions
@@ -77,24 +93,43 @@ class syntax_plugin_orphanmedia extends DokuWiki_Syntax_Plugin {
             $listMediaFiles     = $this->array_flat($listMediaFiles);
             $media_file_counter = count($listMediaFiles);
 
+/*        echo '<pre>';
+        print_r($data);
+        echo '</pre>';  */    
+
+
+            if((DEBUG_MODE_ACTIVE != false) || (stripos($data[0],"perf") !== false)) {
+                    $output .= '<div class="xm_perf">                                  
+                                  <p style="margin-top:10px;"><img src="'.DOKU_URL.'/lib/plugins/orphanmedia/images/a1.png" class="a1_img"><b><u>PERFORMANCE MEASUREMENT</u></b></p>'.NL.
+                               '<table class="xm_perf_tbl">'.NL.
+                               '<tr><td class="xm_perf_tbl"> used syntax: </td>                <td class="xm_perf_tbl"> '.$data[99].' </td></tr>'.NL. 
+                               '<tr><td class="xm_perf_tbl"> list of media files created: </td><td class="xm_perf_tbl"> '.$this->get_execution_time().' s  </td></tr>'.NL; }
+
+
             // retrieve all page files
             $listPageFiles = array();
-            $listPageFiles = $this->_get_allPageFiles($conf['datadir']);
+            $listPageFiles = $this->_get_allPageFiles($conf['datadir'], $data);
             $listPageFiles = $this->array_flat($listPageFiles);
             $page_counter  = count($listPageFiles);
             
+            if((DEBUG_MODE_ACTIVE != false) || (stripos($data[0],"perf") !== false)) {
+                    $output .= '<tr><td class="xm_perf_tbl"> list of page files created: </td> <td class="xm_perf_tbl">'.$this->get_execution_time().' s </td><tr>'.NL; }
+
             // retrieve all media links per page file
             $listPageFile_MediaLinks = array();
-            $listPageFile_MediaLinks = $this->_get_allMediaLinks($listPageFiles, $defFileTypes);
+            $listPageFile_MediaLinks = $this->_get_allMediaLinks($listPageFiles, $defFileTypes, $data[1]);
 //            echo sprintf("<p>%s</p>\n", var_dump($listPageFile_MediaLinks));
-            
+
+            if((DEBUG_MODE_ACTIVE != false) || (stripos($data[0],"perf") !== false)) {
+                    $output .= '<tr><td class="xm_perf_tbl"> media links extracted from pages: </td><td class="xm_perf_tbl">'.$this->get_execution_time().' s </td></tr>'.NL; }
+           
             // analyse matches of media files and pages->media links
             // what if savedir option is used ? => $conf['mediadir']
             $doku_media = $conf['mediadir'].'/';           
             $doku_pages = $conf['datadir'].'/';
             //$doku_media = str_replace("\\","/",DOKU_MEDIA);
             //$doku_pages = str_replace("\\","/",DOKU_PAGES);
-            
+
             $listMediaFiles = array($listMediaFiles,array_pad(array(),count($listMediaFiles),'0'));
             $position = 0;
                         
@@ -102,16 +137,22 @@ class syntax_plugin_orphanmedia extends DokuWiki_Syntax_Plugin {
               // strip ...dokuwiki/data/media path
               $media_file_path = str_replace("\\","/",$media_file_path);
               $media_file_path = str_replace($doku_media,"",$media_file_path);
+              // underline maybe a blank on windows systems 
+              // so we have to replace the blanks of $media_file_path by underline characters
+              $media_file_path = str_replace(" ","_",$media_file_path);        
+                      
               
               // 1. direct matches where pages->media links are identical to media file path
               foreach($listPageFile_MediaLinks as &$perPage_MediaLinks) {
                   for($i = 1; $i < count($perPage_MediaLinks); $i++) {
+                      
                       // prevent destroying unc path
                       if((stripos($perPage_MediaLinks[$i],":\\")===false) && stripos($perPage_MediaLinks[$i],"://")===false) {
                           $perPage_MediaLinks[$i] = str_replace(":","/",$perPage_MediaLinks[$i]);
                       }
                       // strip initial slash if exist
                       if(strpos($perPage_MediaLinks[$i],"/") === 0)  $perPage_MediaLinks[$i] = ltrim($perPage_MediaLinks[$i],"/");
+                      
                       
                       // case 1: find full qualified links: Page_MediaLink = media_file path
                       if($perPage_MediaLinks[$i] === $media_file_path) {
@@ -122,37 +163,43 @@ class syntax_plugin_orphanmedia extends DokuWiki_Syntax_Plugin {
 
                       // case 2: find relative links: Page_path + Page_MediaLink = media_file path
                       //example: Page = tst:start with a media link syntax like {{picture}} = mediafile(tst:picture)
-                      if((strpos($perPage_MediaLinks[$i],"|valid")===false) && (strpos($perPage_MediaLinks[$i],"|relative")===false)) {
-                          $pagePath = rtrim($perPage_MediaLinks[0],end(explode("/",$perPage_MediaLinks[0] ))).$perPage_MediaLinks[$i];
-                          // strip ...dokuwiki/data/pages path
-                          $pagePath = str_replace("\\","/",$pagePath);
-                          $pagePath = str_replace($doku_pages,"",$pagePath);
-                          //echo $pagePath.'<br />';
-                          if($pagePath === $media_file_path) {
-                              $perPage_MediaLinks[$i] .= "|relative";
-                              $listMediaFiles[1][$position] = "found";                         
-                              continue;
-                          }
-                      }
-                      
-                      // case 3: it is an external linked media by http or https
-                      if((strpos($perPage_MediaLinks[$i],'http:')!==false) || (strpos($perPage_MediaLinks[$i],'https:')!==false)) { 
+                      if (stripos($data[2],"relativ")===false) {
                           if((strpos($perPage_MediaLinks[$i],"|valid")===false) && (strpos($perPage_MediaLinks[$i],"|relative")===false)) {
-                              $t_flag = $this->url_exist($perPage_MediaLinks[$i]);
-
-                              if($t_flag !== false) {
+                              $pagePath = rtrim($perPage_MediaLinks[0],end(explode("/",$perPage_MediaLinks[0] ))).$perPage_MediaLinks[$i];
+                              // strip ...dokuwiki/data/pages path
+                              $pagePath = str_replace("\\","/",$pagePath);
+                              $pagePath = str_replace($doku_pages,"",$pagePath);
+                              //echo $pagePath.'<br />';
+                              if($pagePath === $media_file_path) {
                                   $perPage_MediaLinks[$i] .= "|relative";
-                                  $listMediaFiles[1][$position] = "found";
-//                                  msg($perPage_MediaLinks[$i],1);
+                                  $listMediaFiles[1][$position] = "found";                         
                                   continue;
                               }
-//                              else msg($perPage_MediaLinks[$i],-1); 
                           }
                       }
+
+                      // case 3: it is an external linked media by http or https
+                      if (stripos($data[2],"extern")===false) {
+                          if((strpos($perPage_MediaLinks[$i],'http:')!==false) || (strpos($perPage_MediaLinks[$i],'https:')!==false)) { 
+                              if((strpos($perPage_MediaLinks[$i],"|valid")===false) && (strpos($perPage_MediaLinks[$i],"|relative")===false)) {
+                                  $t_flag = $this->url_exist($perPage_MediaLinks[$i]);
+    
+                                  if($t_flag !== false) {
+                                      $perPage_MediaLinks[$i] .= "|relative";
+                                      $listMediaFiles[1][$position] = "found";
+                                      continue;
+                                  } 
+                              }
+                          }
+                      }   
                   }
               }
               $position++;
             }
+
+            if((DEBUG_MODE_ACTIVE != false) || (stripos($data[0],"perf") !== false)) {
+                    $output .= '<tr><td class="xm_perf_tbl"> local and relative media found: </td><td  class="xm_perf_tbl">'.$this->get_execution_time().' s </td></tr>'.NL; }
+
             // 2. missing media files
             $ok_img = "ok.png";
             $nok_img= "nok.png";
@@ -204,6 +251,9 @@ class syntax_plugin_orphanmedia extends DokuWiki_Syntax_Plugin {
                     }
                 }
             }
+
+            if((DEBUG_MODE_ACTIVE != false) || (stripos($data[0],"perf") !== false)) {
+                    $output .= '<tr><td class="xm_perf_tbl"> missing media detected: </td><td class="xm_perf_tbl">'.$this->get_execution_time().' s </td></tr>'.NL; }
             
             $position = 0;
             $prviewcounter = 0;            
@@ -260,7 +310,7 @@ class syntax_plugin_orphanmedia extends DokuWiki_Syntax_Plugin {
                   
                   $output_orphan .= '<tr>'.NL.
                               '<td>'.NL.
-                                  '<img src="'.DOKU_URL.'\/lib\/plugins\/orphanmedia\/images\/'.$nok_img.'" alt="nok" title="orphan" align="middle" />'.NL.
+                                  '<img src="'.DOKU_URL.'/lib/plugins/orphanmedia/images/'.$nok_img.'" alt="nok" title="orphan" align="middle" />'.NL.
                               '</td>'.NL.
                               '<td>'.$orphan_counter.'</td>'.NL.
                               '<td>'.$listMediaFiles[0][$position].'</td>'.NL.
@@ -268,6 +318,9 @@ class syntax_plugin_orphanmedia extends DokuWiki_Syntax_Plugin {
                 }
                 $position++;  
             }
+
+            if((DEBUG_MODE_ACTIVE != false) || (stripos($data[0],"perf") !== false)) {
+                    $output .= '<tr><td class="xm_perf_tbl"> orphans detected: </td><td class="xm_perf_tbl">'.$this->get_execution_time().' s </td></tr></table></div><br />'.NL; }
 
             $output_valid    .= '</table></div>';
             $output_relative .= '</table></div>';
@@ -324,8 +377,8 @@ class syntax_plugin_orphanmedia extends DokuWiki_Syntax_Plugin {
             if((stristr($data[0], "orphan")===false) && (stristr($data[0], "all")===false)){
                 $output_orphan='';
             }
-            
-            $renderer->doc .= $output_summary.$output_valid.$output_relative.$output_missing.$output_orphan;          
+                        
+            $renderer->doc .= $output.$output_summary.$output_valid.$output_relative.$output_missing.$output_orphan;          
 
             return true;
     }
@@ -348,11 +401,12 @@ class syntax_plugin_orphanmedia extends DokuWiki_Syntax_Plugin {
                             }
                             //-------------------------------------------- 
                             if($defFileTypes === '') {
-                                $listDir[] = $dir."/".$sub;
+                            // Thumb.db is created automatically sometimes and to be ignored always
+                            if(stripos($sub,"thumbs.db")===false) $listDir[] = $dir."/".$sub;
                                 //echo sprintf("<p><b>%s</b></p>\n", $dir."/".$sub);
                             } 
                             // if media file extension filters are set on syntax line the $defFileTypes containing a string of all
-                            // and is the string to search the currnt file extension in 
+                            // and is the string to search the current file extension in 
                             elseif(strpos($defFileTypes, $extension)!==false) {
                                 $listDir[] = $dir."/".$sub;
                                 //echo sprintf("<p><b>%s</b></p>\n", $dir."/".$sub);
@@ -372,9 +426,10 @@ class syntax_plugin_orphanmedia extends DokuWiki_Syntax_Plugin {
 /******************************************************************************/
 /* loop through data/pages directory and collect all page files 
 */ 
-    function _get_allPageFiles($dir) {
+    function _get_allPageFiles($dir, $data) {
         $listDir = array();
         if(is_dir($dir)) {
+
             if($handler = opendir($dir)) { 
                 while (FALSE !== ($sub = readdir($handler))) { 
                     if ($sub !== "." && $sub !== "..") { 
@@ -392,7 +447,13 @@ class syntax_plugin_orphanmedia extends DokuWiki_Syntax_Plugin {
                               }
                         }
                         elseif(is_dir($dir."/".$sub)) { 
-                            $listDir[$sub] = $this->_get_allPageFiles($dir."/".$sub, $delim,$excludes);
+//                            echo $data[1]." : ".stripos($dir."/".$sub,$data[1])."  -> dir/sub:  ".$dir."/".$sub."<br>";
+                            // $data[1] = skip ns
+                            if(stripos($dir."/".$sub,$data[1])>0) {
+//                              echo "dir/sub (skipped):  ".$perPage_MediaLinks[$i]."<br>";
+                              continue;
+                            }
+                            else $listDir[$sub] = $this->_get_allPageFiles($dir."/".$sub, $data);
                         } 
                     } 
                 }    
@@ -405,31 +466,40 @@ class syntax_plugin_orphanmedia extends DokuWiki_Syntax_Plugin {
 /******************************************************************************/
 /* loop through pages and extract their media links 
 */ 
-    function _get_allMediaLinks($listPageFiles, $defFileTypes) {
+    function _get_allMediaLinks($listPageFiles, $defFileTypes, $skip_NS) {
         $_all_links = array();
         $pageCounter = 0;
         $linkCounter = 1;
-        define('LINK_PATTERN', "/\{\{.*?\}\}/i");
+        define('LINK_PATTERN', '/\{\{.*?\}\}/s');
         define('LINK_PATTERNtwo', "/<flashplayer.*>file=(?<link>.*)\x26.*<\/flashplayer>|<flashplayer.*>file=(?<all>.*)<\/flashplayer>/");
         define('LINK_PATTERNthree', "/\[\[(?<link>\\\\.*)\|.*\]\]|\[\[(?<all>\\\\.*)\]\]/");
-        define('LINK_PATTERNfour', "/'\{\{gallery>[^}]*?\}\}'/");        
+        define('LINK_PATTERNfour', "/'\{\{gallery>*?\}\}'/");        
+        define('LINK_PATTERNfive', "/'\{\{map>*?\}\}'/");        
         
         // get all defined tags where media links inbetween are to be ignored
         $ignore_tags = array();
         $ignore_tags = parse_ini_file(DOKU_PLUGIN."orphanmedia/config.ini");
-        
+        if (file_exists(DOKU_PLUGIN."orphanmedia/user_pattern.ini")) $ignore_tags = $ignore_tags + parse_ini_file(DOKU_PLUGIN."orphanmedia/user_pattern.ini");
+
         foreach($listPageFiles as $page_filepath) {
             $_all_links[$pageCounter][0] = $page_filepath;
             // read the content of the page file to be analyzed for media links
-            $body = file_get_contents($page_filepath);
+            $body = strtolower(file_get_contents($page_filepath));
+            
             // -----------------------------------
             // ignore content between defined tags e.g. '<code> ... </code>'
             $body = preg_replace($ignore_tags,' ',$body);
             // find all page-> media links defined by Link pattern into $links
              $links = array(); 
-             if( preg_match(LINK_PATTERN, $body) ) {
+             {
                  preg_match_all(LINK_PATTERN, $body, $links);
                  $links = $this->array_flat($links);
+                 
+/*        echo '<pre>';
+        print_r($links);
+        echo '</pre>';      
+*/
+
              }
             // -----------------------------------
             // Exception for flashplayer plugin where file reference is not inside curly brackets
@@ -513,7 +583,40 @@ class syntax_plugin_orphanmedia extends DokuWiki_Syntax_Plugin {
                 }
                 unset($fileshares);
                 $fileshares = $b_links;
+             }
+                                                                         
+             $imgmaps = array();
+             $c_links = array(); 
+             if( preg_match(LINK_PATTERNfour, $body) ) {
+                 preg_match_all(LINK_PATTERNfour, $body, $imgmaps);
+                //finally loop through link and all and pick-up all non-empty fields
+                foreach($imgmaps['link'] as $imgmaps_link) {
+                    if(strlen($imgmaps_link)>3) $c_links[] = $imgmaps_link;
+                }
+                foreach($imgmaps['all'] as $imgmaps_link) {
+                    if(strlen($imgmaps_link)>3) $c_links[] = $imgmaps_link;
+                }
+                unset($imgmaps);
+                $imgmaps = $c_links;
              }                                                            
+
+             $galary = array();
+             $d_links = array(); 
+             if( preg_match(LINK_PATTERNfive, $body) ) {
+                 preg_match_all(LINK_PATTERNfive, $body, $galary);
+                 
+                 echo var_dump($galary);
+                //finally loop through link and all and pick-up all non-empty fields
+                foreach($galary['link'] as $galary_link) {
+                    if(strlen($galary_link)>3) $d_links[] = $galary_link;
+                }
+                foreach($galary['all'] as $imgmaps_link) {
+                    if(strlen($galary_link)>3) $d_links[] = $galary_link;
+                }
+                unset($galary);
+                $galary = $d_links;
+             }                                                            
+
             // -----------------------------------
             // loop through page-> media link array and prepare links
             foreach($links as $media_link) {
@@ -588,6 +691,50 @@ class syntax_plugin_orphanmedia extends DokuWiki_Syntax_Plugin {
                  }
              }
 
+             // loop through page-> imgmaps link array and prepare links
+             if(count($imgmaps)>0) {         
+                 foreach($imgmaps as $imgmaps_link) {
+                    if(strlen($imgmaps_link)<3) continue;
+                    // filter according $defFileTypes
+                    if($defFileTypes !==""){
+                        $parts = explode(".", $imgmaps_link);
+                        if (is_array($parts) && count($parts) > 1) {
+                           $extension = end($parts);
+                           $extension = ltrim($extension, ".");
+                        }
+                      if(stristr($defFileTypes, $extension)===false) continue;
+                    }
+                    // exclude external imgmaps links
+                    if((strlen($imgmaps_link)>1) && strpos($imgmaps_link, "://")<1) {
+                         // collect all imgmaps links of the current page
+                         $_all_links[$pageCounter][$linkCounter] = strtolower($imgmaps_link);
+                         $linkCounter++;
+                    }
+                 }
+             }
+
+             // loop through page-> galary link array and prepare links
+             if(count($galary)>0) {         
+                 foreach($galary as $galary_link) {
+                    if(strlen($galary_link)<3) continue;
+                    // filter according $defFileTypes
+                    if($defFileTypes !==""){
+                        $parts = explode(".", $galary_link);
+                        if (is_array($parts) && count($parts) > 1) {
+                           $extension = end($parts);
+                           $extension = ltrim($extension, ".");
+                        }
+                      if(stristr($defFileTypes, $extension)===false) continue;
+                    }
+                    // exclude external galary links
+                    if((strlen($galary_link)>1) && strpos($galary_link, "://")<1) {
+                         // collect all galary links of the current page
+                         $_all_links[$pageCounter][$linkCounter] = strtolower($galary_link);
+                         $linkCounter++;
+                    }
+                 }
+             }
+
             // do merge media and flashplayer arrays
             // $page_filepath string does already contain all local media and flashplayer links separated by "|"
             //$page_filepath = preg_replace(":","/",$page_filepath);
@@ -637,7 +784,7 @@ class syntax_plugin_orphanmedia extends DokuWiki_Syntax_Plugin {
                     
                 
             $output.= '<tr>'.NL.
-                      '   <td class="col0 centeralign"><img src="'.DOKU_URL.'\/lib\/plugins\/orphanmedia\/images\/'.$img.'" align="middle" /></td>'.NL.
+                      '   <td class="col0 centeralign"><img src="'.DOKU_URL.'lib/plugins/orphanmedia/images/'.$img.'" align="middle" /></td>'.NL.
                       '   <td>'.$counter.'</td>'.NL.
                       '   <td>' . $t1 . "</td><td>" . $m_link . '</td>'.
                       '</tr>'.NL;                   
@@ -676,6 +823,18 @@ class syntax_plugin_orphanmedia extends DokuWiki_Syntax_Plugin {
           }
           return $ratio;
       }
-// ---------------------------------------------------------------   
+// --------------------------------------------------------------- 
+/******************************************************************************/
+/* get execution time in seconds at current point of call                     *
+ * @return float Execution time at this point of call                         *
+ * source: http://www.php.net/microtime                                       */ 
+  function get_execution_time()
+  {   static $microtime_start = null;
+      if($microtime_start === null)
+      {   $microtime_start = microtime(true);
+          return 0.0; }    
+      return round(microtime(true) - $microtime_start, 3); 
+  }  
+// ---------------------------------------------------------------
 }
 ?>

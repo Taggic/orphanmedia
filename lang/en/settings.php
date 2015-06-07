@@ -7,3 +7,4 @@
  */
  
 $lang['prev_limit']         = 'max quantity of pictures to be previewed';
+$lang['admin_orphanmedia']  = 'Orphan Media detection';    
